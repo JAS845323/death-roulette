@@ -222,6 +222,18 @@ b.blank { color: var(--blank); }
 .paper button[type="submit"]:hover { background: #8b1d18; color: #fff; }
 
 #help { background: rgba(0, 0, 0, .82); }
+#settings { background: rgba(0, 0, 0, .55); }
+.settings-box { width: 640px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 22px; }
+.seg.skins { grid-template-columns: repeat(4, 1fr); }
+.overlay .seg button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px; font-size: 17px; }
+.seg button small { font-size: 12px; color: var(--dim); letter-spacing: 0; }
+.overlay .seg button[aria-pressed="true"] { background: var(--bone); color: #0a0b0a; border-color: var(--bone); }
+.seg button[aria-pressed="true"] small { color: #3a382f; }
+.seg i { width: 34px; height: 34px; border-radius: 50%; box-shadow: inset 0 -6px 10px rgba(0, 0, 0, .45); }
+.set-note { margin: -4px 0 12px; font-size: 13px; color: var(--dim); }
+.link-btn { background: none !important; border: 0 !important; color: var(--dim) !important; font-size: 14px !important; text-decoration: underline; text-underline-offset: 4px; }
+.link-btn:hover { color: var(--bone) !important; }
 .help-box { width: 760px; max-height: 720px; overflow: auto; padding: 28px 36px; background: #0d100e; border: 1px solid rgba(228, 221, 198, .2); }
 .help-box h2 { margin: 0 0 10px; font-size: 22px; letter-spacing: .2em; }
 .rules { margin: 0 0 22px; padding-left: 20px; font-size: 15px; line-height: 1.75; color: #c9c2ab; }
@@ -275,6 +287,7 @@ b.blank { color: var(--blank); }
           <button id="btn-mute" type="button" aria-pressed="false">聲音：開</button>
           <button id="btn-music" type="button" aria-pressed="false">音樂：開</button>
           <button id="btn-help" type="button">規則與道具</button>
+          <button id="btn-settings" type="button">設定</button>
         </div>
       </div>
 
@@ -316,6 +329,7 @@ b.blank { color: var(--blank); }
         <h1 class="glitch" data-text="死亡輪盤">死亡輪盤</h1>
         <p class="tagline">兩個人，一把霰彈槍，一把實彈與空包彈。<br>你只知道數量，不知道順序。</p>
         <button id="btn-start" type="button">走進去</button>
+        <button id="btn-settings2" type="button" class="link-btn">設定：畫質與角色外觀</button>
         <p class="credit">致敬 Mike Klubnika 的《Buckshot Roulette》· 非官方網頁版</p>
       </div>
     </section>
@@ -380,6 +394,26 @@ b.blank { color: var(--blank); }
         <h2>道具</h2>
         <ul id="help-list"></ul>
         <button id="help-close" type="button">回到桌邊</button>
+      </div>
+    </section>
+
+    <section id="settings" class="overlay" hidden>
+      <div class="help-box settings-box" role="dialog" aria-labelledby="settings-h">
+        <h2 id="settings-h">畫質</h2>
+        <div class="seg" id="opt-quality">
+          <button type="button" data-v="low">低<small>電腦比較慢時用</small></button>
+          <button type="button" data-v="mid">中<small>沒有軟陰影的細節</small></button>
+          <button type="button" data-v="high">高<small>完整陰影與解析度</small></button>
+        </div>
+        <h2>角色外觀</h2>
+        <p class="set-note">單人時套用在莊家身上；雙人連線時，對手看到的你就是這個樣子。</p>
+        <div class="seg skins" id="opt-skin">
+          <button type="button" data-v="pale"><i style="background:#cfc5ad"></i>蒼白<small>原版</small></button>
+          <button type="button" data-v="rot"><i style="background:#8fa77f"></i>腐爛<small>發綠、濕亮</small></button>
+          <button type="button" data-v="burnt"><i style="background:#7a5444"></i>焦黑<small>燒傷的紅褐</small></button>
+          <button type="button" data-v="ash"><i style="background:#9ea8bc"></i>灰白<small>石膏般的冷灰</small></button>
+        </div>
+        <button id="settings-close" type="button">完成</button>
       </div>
     </section>
 
@@ -776,6 +810,12 @@ const SFX = (() => {
     yourturn() { tone(587, 0.5, { type: 'triangle', gain: 0.05, wet: 0.6 }); tone(880, 0.6, { type: 'triangle', gain: 0.04, when: 0.12, wet: 0.6 }); },
     dealerturn() { tone(110, 0.7, { to: 52, gain: 0.35, wet: 0.7 }); noise(0.35, { freq: 600, to: 120, gain: 0.25, wet: 0.5 }); },
     victory() { [62, 65, 69, 74].forEach((m, i) => tone(midi(m), 1.4 - i * 0.2, { type: 'triangle', gain: 0.08, when: i * 0.16, wet: 0.7 })); },
+    // 死神現身：低沉的風聲與合唱般的嗡鳴
+    reaper() {
+      noise(2.2, { type: 'bandpass', freq: 220, to: 900, q: 1.2, gain: 0.3, attack: 0.6, wet: 1 });
+      [146.8, 174.6, 220].forEach((f, i) => tone(f, 2.6, { type: 'triangle', gain: 0.035, attack: 0.9, wet: 1, detune: i * 6 - 6 }));
+      tone(55, 2.4, { type: 'sawtooth', gain: 0.08, attack: 0.5, wet: 0.6 });
+    },
     creak() { noise(0.6, { type: 'bandpass', freq: 520, to: 340, q: 9, gain: 0.25, wet: 0.4 }); },
   };
 
@@ -1035,30 +1075,32 @@ const Net = (() => {
 
   // ---------- 配對 ----------
   // 開房的人等第一個進來的客人；客人看到房主的 start 裡寫的是自己的 tok 才開始
-  function host(code, name, diff) {
+  const cleanSkin = v => (['pale', 'rot', 'burnt', 'ash'].includes(v) ? v : 'pale');
+
+  function host(code, name, diff, skin) {
     return new Promise(async (res, rej) => {
       try { await open(code, 'host'); } catch (e) { return rej(e); }
-      set({ v: 1, role: 'host', name, tok });
+      set({ v: 1, role: 'host', name, tok, skin });
       link.watch((peer, st) => {
         if (!oppPeer && st && st.role === 'guest' && st.tok) {
           oppPeer = peer; oppName = cleanName(st.name, 'GUEST');
           const seed = (Math.random() * 2 ** 31) | 0;
           set({ start: { seed, diff, to: st.tok } });
-          res({ seed, diff, oppName });
+          res({ seed, diff, oppName, oppSkin: cleanSkin(st.skin) });
         }
         track(peer, st);
       });
     });
   }
 
-  function guest(code, name) {
+  function guest(code, name, skin) {
     return new Promise(async (res, rej) => {
       try { await open(code, 'guest'); } catch (e) { return rej(e); }
-      set({ v: 1, role: 'guest', name, tok });
+      set({ v: 1, role: 'guest', name, tok, skin });
       link.watch((peer, st) => {
         if (!oppPeer && st && st.role === 'host' && st.start && st.start.to === tok) {
           oppPeer = peer; oppName = cleanName(st.name, 'HOST');
-          res({ seed: st.start.seed | 0, diff: st.start.diff === 'hard' ? 'hard' : 'easy', oppName });
+          res({ seed: st.start.seed | 0, diff: st.start.diff === 'hard' ? 'hard' : 'easy', oppName, oppSkin: cleanSkin(st.skin) });
         }
         track(peer, st);
       });
@@ -1195,8 +1237,18 @@ const Game = {
     await this.startRound(1);
   },
 
-  // 每次裝填誰先手：雙人時永遠是開房的人（在客人那邊就是「莊家」那一側）
-  first() { return this.s.host ? 'player' : 'dealer'; },
+  // 雙人：等對手也走到同一個地方（例如對方還在看自己被電回來的畫面），雙方一起往下
+  async sync() {
+    const s = this.s;
+    Net.send({ k: 'ready' });
+    let waiting = true;
+    sleep(500).then(() => { if (waiting) UI.say(`等待${s.opp}……`); });
+    for (;;) {
+      const a = await Net.take();
+      if (a && a.k === 'ready') break;
+    }
+    waiting = false;
+  },
 
   async startRound(r) {
     const s = this.s;
@@ -1206,7 +1258,7 @@ const Game = {
       items: { player: Array(8).fill(null), dealer: Array(8).fill(null) },
       shells: [], known: { player: [], dealer: [] },
       sawed: false, cuffs: { player: 0, dealer: 0 },
-      wiresCut: false, turn: this.first(), busy: true,
+      wiresCut: false, turn: 'player', busy: true,
     });
     UI.resetTable();
     UI.renderAll(s);
@@ -1218,6 +1270,7 @@ const Game = {
 
   async newLoad() {
     const s = this.s;
+    if (s.mp) await this.sync();
     const [lo, hi] = SHELL_RANGE[s.round];
     const n = randInt(lo, hi);
     let live = rand() < 0.5 ? Math.floor(n / 2) : Math.ceil(n / 2);
@@ -1226,13 +1279,15 @@ const Game = {
     s.known = { player: Array(n).fill(undefined), dealer: Array(n).fill(undefined) };
     s.sawed = false;
     s.cuffs = { player: 0, dealer: 0 };
-    s.turn = this.first();
+    // 單人永遠你先手；雙人每次裝填擲硬幣（兩邊用同一個亂數，結果一樣）
+    s.turn = !s.mp ? 'player' : (rand() < 0.5) === s.host ? 'player' : 'dealer';
     UI.setSawed(false);
     UI.renderAll(s);
     await UI.presentShells(live, n - live);
     const k = ITEMS_PER_LOAD[s.diff][s.round];
     if (k) await this.dealItems(k);
     UI.renderAll(s);
+    if (s.mp) await UI.say(`擲硬幣……${s.turn === 'player' ? '你' : s.opp}先開槍。`);
   },
 
   async dealItems(k) {
@@ -1557,8 +1612,11 @@ const Game = {
     const s = this.s, winner = other(who);
     s.wins[winner]++;
     const over = s.wins[winner] >= 2;
-    if (who === 'dealer') await UI.dealerDown();
-    else { if (!over) s.stats.revives++; await UI.blackout(!over); }
+    if (who === 'dealer') {
+      await UI.dealerDown();
+      // 對手那邊正在看自己被電回來；這邊看死神拿除顫器把他電回來，不用乾等
+      if (!over) await UI.reaperRevive();
+    } else { if (!over) s.stats.revives++; await UI.blackout(!over); }
     if (over) return UI.showEnd(winner === 'player', s);
     await UI.say(who === 'dealer'
       ? `${s.opp}倒下了。這一局你贏了（${s.wins.player}：${s.wins.dealer}）。`
@@ -3068,6 +3126,7 @@ const World = (() => {
       clearcoat: 0.3, clearcoatRoughness: 0.45, vertexColors: true,
     });
     const head = mesh(geo, mat);
+    D.headMat = mat;
 
     // 牙齒：發黃、長短不一、有缺牙
     const missing = new Set([-4, 2, 5]);
@@ -4588,6 +4647,159 @@ const World = (() => {
   }
 
   // ---------- 除顫器電擊板（貼在鏡頭前） ----------
+  // ---------- 死神：雙人時對手倒下，由它拿除顫器把對手電回來（活著的人不用乾等） ----------
+  let reaper;
+  function buildReaper() {
+    const g = new T.Group();
+    const mats = [];
+    const m = (color, o = {}) => { const x = std(color, Object.assign({ transparent: true, opacity: 0 }, o)); mats.push(x); return x; };
+    const cloth = m(0x060606, { roughness: 0.95 }), bone = m(0xc9bf9f, { roughness: 0.6 }), hole = m(0x000000, { roughness: 1 });
+    // 從膝蓋附近彎腰
+    const body = new T.Group(); body.position.y = 0.55; g.add(body);
+    const prof = [[0.0, -0.55], [0.44, -0.55], [0.4, -0.25], [0.31, 0.35], [0.27, 0.8], [0.22, 0.95], [0.12, 1.04], [0.0, 1.06]]
+      .map(([x, y]) => new T.Vector2(x, y));
+    const robe = mesh(new T.LatheGeometry(prof, 28), cloth); robe.scale.z = 0.72; body.add(robe);
+    // 兜帽前面開口，裡面是骷髏
+    const hood = mesh(new T.SphereGeometry(0.17, 24, 16, PI / 2 + 0.75, PI * 2 - 1.5), m(0x050505, { roughness: 0.95, side: T.DoubleSide }));
+    hood.scale.set(1, 1.28, 1.12); hood.position.y = 1.16; body.add(hood);
+    const head = new T.Group(); head.position.set(0, 1.12, 0.02); body.add(head);
+    const skull = mesh(new T.SphereGeometry(0.1, 20, 16), bone); skull.scale.set(0.88, 1.08, 0.95); head.add(skull);
+    const jaw = mesh(new T.BoxGeometry(0.11, 0.035, 0.07), bone); jaw.position.set(0, -0.085, 0.04); head.add(jaw);
+    const eyes = [];
+    for (const x of [-0.037, 0.037]) {
+      const sock = mesh(new T.SphereGeometry(0.027, 12, 10), hole, false); sock.position.set(x, 0.012, 0.075); head.add(sock);
+      const e = new T.Sprite(new T.SpriteMaterial({ map: tex.glow, color: 0xff3018, blending: T.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 }));
+      e.scale.setScalar(0.09); e.position.set(x, 0.012, 0.1); head.add(e); eyes.push(e);
+    }
+    // 兩隻手臂（袖子）＋骨頭手，各拿一塊電擊板
+    const arms = [];
+    for (const sx of [-1, 1]) {
+      const sh = new T.Group(); sh.position.set(0.21 * sx, 0.86, 0.02); body.add(sh);
+      const sleeve = mesh(new T.CylinderGeometry(0.055, 0.1, 0.5, 14, 1, true), m(0x070707, { roughness: 0.95, side: T.DoubleSide }));
+      sleeve.position.y = -0.25; sh.add(sleeve);
+      const hand = new T.Group(); hand.position.y = -0.52; sh.add(hand);
+      const palm = mesh(new T.BoxGeometry(0.06, 0.07, 0.025), bone); hand.add(palm);
+      for (let k = 0; k < 4; k++) {
+        const f = mesh(new T.CylinderGeometry(0.006, 0.005, 0.06, 6), bone, false);
+        f.position.set(-0.022 + k * 0.015, -0.06, 0.012); f.rotation.x = 0.5; hand.add(f);
+      }
+      const pad = new T.Group(); pad.position.set(0, -0.08, 0.04); hand.add(pad);
+      const plate = mesh(new T.BoxGeometry(0.1, 0.012, 0.075), m(0x3a3e42, { metalness: 0.85, roughness: 0.32, envMap: envTex }), false);
+      const back = mesh(new T.BoxGeometry(0.11, 0.03, 0.085), m(0x59605a, { roughness: 0.5 }), false); back.position.y = 0.02;
+      pad.add(plate, back);
+      arms.push(sh);
+    }
+    // 鐮刀立在旁邊
+    const scythe = new T.Group(); scythe.position.set(-0.5, 0, 0.05); scythe.rotation.z = -0.08; g.add(scythe);
+    const pole = mesh(new T.CylinderGeometry(0.016, 0.02, 2.0, 8), m(0x1e140c, { roughness: 0.8 })); pole.position.y = 1.0; scythe.add(pole);
+    const blade = mesh(new T.TorusGeometry(0.42, 0.014, 4, 32, 1.7), m(0x8a9096, { metalness: 0.9, roughness: 0.25, envMap: envTex }));
+    blade.scale.set(1, 1, 3); blade.rotation.set(0, 0, 0.15); blade.position.set(0.38, 1.62, 0); scythe.add(blade);
+    // 它自己帶一點冷光，站在暗處也看得到輪廓
+    const light = new T.PointLight(0x8fa4ff, 0, 2.6, 2); light.position.set(-0.3, 1.5, 1.0); g.add(light);
+    const zap = new T.PointLight(0xcfe8ff, 0, 2.5, 2); zap.position.set(0, 0.2, 0.7); g.add(zap);
+    g.visible = false;
+    scene.add(g);
+    reaper = { g, body, head, arms, eyes, mats, light, zap };
+  }
+  function reaperFade(k) {
+    reaper.mats.forEach(x => { x.opacity = k; x.transparent = k < 0.999; x.depthWrite = k > 0.5; });
+    reaper.eyes.forEach(e => { e.material.opacity = 0.95 * k; });
+    reaper.light.intensity = 2.2 * k;
+  }
+  // 對手倒在椅子後面的地上：死神從黑暗裡浮出來，彎腰電兩下，對手爬回椅子上，死神退回黑暗（約 9 秒）
+  async function reaperRevive() {
+    const R0 = reaper, g = R0.g;
+    g.visible = true;
+    g.position.set(0.8, -0.85, -2.85);   // 站在椅子右後方（椅背會擋住正後方），朝倒在椅子旁地上的對手彎腰
+    g.rotation.y = -0.2;
+    R0.body.rotation.x = 0; R0.head.rotation.set(0, 0, 0);
+    R0.arms.forEach(a => a.rotation.set(-0.25, 0, 0));
+    reaperFade(0);
+    D.group.visible = false;
+    cam({ pos: [-0.15, 0.62, 0.55], look: [0.45, 0.25, -2.0], fov: 50 }, 0.9);
+    SFX.play('reaper');
+    await anim(1.6, t => { reaperFade(t); g.position.z = -2.85 + 0.55 * t; g.position.y = -0.85 - 0.25 * (1 - t); });
+    // 抬頭看一眼，然後彎腰伸手
+    await anim(0.6, t => { R0.head.rotation.x = -0.25 * Math.sin(t * PI); });
+    await anim(1.0, t => {
+      R0.body.rotation.x = 0.75 * t;
+      R0.arms.forEach(a => { a.rotation.x = -0.25 - 0.9 * t; });
+      R0.head.rotation.x = 0.35 * t;
+    });
+    SFX.play('whine');
+    await wait(1.1);
+    for (let k = 0; k < 2; k++) {
+      SFX.play('zap'); SFX.play('thud');
+      shake = Math.max(shake, 0.025);
+      emit(g.localToWorld(V(0, 0.1, 0.75)), { count: 26, color: 0xcfe8ff, size: 0.016, life: 0.45, vel: V(0, 0.8, 0.3), vspread: 0.8, gravity: 3, grow: 0, opacity: 1 });
+      await anim(0.35, t => { R0.zap.intensity = 9 * (1 - t); R0.body.rotation.x = 0.75 - 0.08 * Math.sin(t * PI); });
+      await wait(k ? 0.4 : 0.75);
+    }
+    SFX.play('ecg');
+    // 對手從地上爬回椅子；死神直起身，看向你
+    resetDealer();
+    D.group.position.y = -0.95;
+    D.lean = 0.5;
+    const rise = anim(1.5, t => { D.group.position.y = -0.95 * (1 - t); D.lean = 0.5 * (1 - t); }, 'out');
+    await anim(0.9, t => {
+      R0.body.rotation.x = 0.75 * (1 - t);
+      R0.arms.forEach(a => { a.rotation.x = -1.15 + 0.9 * t; });
+      R0.head.rotation.x = 0.35 * (1 - t) - 0.1 * t;
+    });
+    SFX.play('ecg');
+    await rise;
+    await wait(0.6);
+    await anim(1.3, t => { reaperFade(1 - t); g.position.z = -2.3 - 0.5 * t; });
+    g.visible = false;
+    D.group.position.y = 0; D.lean = 0;
+  }
+
+  // ---------- 莊家（雙人時是對手）的膚色：同一張臉、同一套貼圖，只換色調 ----------
+  const SKINS = {
+    pale: { tint: 0xffffff, rough: 0.5 },     // 原版：蒼白
+    rot: { tint: 0xa9c79a, rough: 0.42 },     // 腐爛：發綠、濕亮
+    burnt: { tint: 0x8c6252, rough: 0.7 },    // 焦黑：燒傷的紅褐
+    ash: { tint: 0xb4bed6, rough: 0.68 },     // 灰白：石膏般的冷灰
+  };
+  let skinName = 'pale', skinDirty = true;
+  function setDealerSkin(name) {
+    skinName = SKINS[name] ? name : 'pale';
+    skinDirty = true;
+    applySkin();
+  }
+  function applySkin() {
+    const sk = SKINS[skinName], c = new T.Color(sk.tint);
+    if (D.headMat) { D.headMat.color.copy(c); D.headMat.roughness = sk.rough; }
+    M.skin.color.setHex(0xbfb6a2).multiply(c);
+    let pending = false;
+    for (const h of D.hands || []) {
+      if (!h.userData.ready) { pending = true; continue; }
+      h.userData.skin.material.color.copy(c);
+    }
+    skinDirty = pending;   // 手的網格還沒產生好，等好了再套一次
+  }
+
+  // ---------- 畫質 ----------
+  const QUALITY = {
+    low: { pr: 0.75, shadow: false, map: 512 },
+    mid: { pr: 1, shadow: true, map: 1024 },
+    high: { pr: 2, shadow: true, map: 2048 },
+  };
+  let quality = 'high';
+  function setQuality(q) {
+    quality = QUALITY[q] ? q : 'high';
+    const Q = QUALITY[quality];
+    if (renderer.shadowMap.enabled !== Q.shadow) {
+      renderer.shadowMap.enabled = Q.shadow;
+      scene.traverse(o => { const ms = o.material ? [].concat(o.material) : []; ms.forEach(x => { x.needsUpdate = true; }); });
+    }
+    if (spot.shadow.mapSize.x !== Q.map) {
+      spot.shadow.mapSize.set(Q.map, Q.map);
+      if (spot.shadow.map) { spot.shadow.map.dispose(); spot.shadow.map = null; }
+    }
+    resize();
+  }
+
   let paddles;
   function buildPaddles() {
     paddles = new T.Group();
@@ -4916,12 +5128,13 @@ const World = (() => {
     camera.updateMatrixWorld(true);
     updateDealer(dt);
     updateParticles(dt);
+    if (skinDirty) applySkin();
     renderer.render(scene, camera);
   }
 
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, QUALITY[quality].pr));
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -4948,6 +5161,7 @@ const World = (() => {
     buildDealer();
     buildGun();
     buildPaddles();
+    buildReaper();
     resize();
     window.addEventListener('resize', resize);
     canvas.addEventListener('pointermove', onMove);
@@ -4986,7 +5200,7 @@ const World = (() => {
     syncItems, clearItems, useItem, setDealerCuffed,
     onFx(fn) { handlers.fx = fn; },
     dealerGrip, dealerGripHand, dealerLean, dealerHit, dealerFall, dealerFlinch, resetDealer, lampOff,
-    cutPower, setPower,
+    cutPower, setPower, reaperRevive, setDealerSkin, setQuality,
     paddlesIn, paddlesZap, paddlesOut, reviveStage,
     setLook(v) { D.look = v; },
   };
@@ -5432,6 +5646,12 @@ const UI = (() => {
     e.querySelector('button').focus();
   }
 
+  // 雙人：對手倒下，死神把他電回來
+  async function reaperRevive() {
+    await World.reaperRevive();
+    World.cam('seat', 1);
+  }
+
   // 第三局：鏡頭轉向後牆的電閘，拉桿彈下、斷電、除顫器螢幕黑掉，再回到座位
   async function cutWires() {
     hideAim();
@@ -5473,7 +5693,7 @@ const UI = (() => {
     build, say, renderItems, renderHP, renderInfo, renderAll, setInteractive,
     openAim, closeAim, previewAim, resetTable, setSawed, resetGun, roundBanner, presentShells,
     aim, bang, dryFire, eject, peek, itemFx, itemDone, pickSteal, resolveSteal, isStealing, hurt,
-    dealerDown, blackout, showEnd, showLeft, tip, cutWires,
+    dealerDown, blackout, showEnd, showLeft, tip, cutWires, reaperRevive,
     isAiming: () => aiming,
   };
 })();
@@ -5486,6 +5706,8 @@ function boot() {
   try {
     if (typeof THREE === 'undefined') throw new Error('3D 引擎（Three.js）沒有載入，請確認網路連線後重新整理。');
     UI.build();
+    World.setQuality(Settings.get().quality);
+    World.setDealerSkin(Settings.get().skin);
   } catch (err) {
     showFatal(err);
     return;
@@ -5517,6 +5739,8 @@ function boot() {
   }
   const diff = () => ($('input[name="diff"]:checked') || {}).value === 'hard' ? 'hard' : 'easy';
   function begin(name, opts) {
+    // 單人：莊家穿自己選的外觀；雙人：對手穿他自己選的
+    World.setDealerSkin(opts.mp ? opts.mp.oppSkin : Settings.get().skin);
     SFX.play('sign');
     $('#waiver').hidden = true;
     $('#lobby').hidden = true;
@@ -5560,9 +5784,9 @@ function boot() {
   codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') $('#btn-join').click(); });
   Net.onLost(() => Game.opponentLeft());
 
-  const start = (name, host) => ({ seed, diff: d, oppName }) => {
+  const start = (name, host) => ({ seed, diff: d, oppName, oppSkin }) => {
     status(`${oppName} 進來了。`);
-    begin(name, { diff: d, mp: { seed, host, opp: oppName } });
+    begin(name, { diff: d, mp: { seed, host, opp: oppName, oppSkin } });
   };
   const fail = e => {
     lobbyLock(false);
@@ -5587,7 +5811,7 @@ function boot() {
     $('#lobby-code').hidden = false;
     $('#lobby-code b').textContent = code;
     status(`等待對手加入……（難度：${diff() === 'hard' ? '困難' : '簡單'}）`);
-    Net.host(code, name, diff()).then(start(name, true), fail);
+    Net.host(code, name, diff(), Settings.get().skin).then(start(name, true), fail);
   });
   $('#btn-join').addEventListener('click', () => {
     if (lobbyBusy) return;
@@ -5595,7 +5819,7 @@ function boot() {
     if (code.length !== 4) { status('請輸入 4 個字母的房間代碼。', true); SFX.play('deny'); return; }
     lobbyLock(true);
     status(`連線到房間 ${code}，等待房主……`);
-    Net.guest(code, nameInput.value.trim()).then(start(nameInput.value.trim(), false), fail);
+    Net.guest(code, nameInput.value.trim(), Settings.get().skin).then(start(nameInput.value.trim(), false), fail);
   });
   $('#btn-lobby-back').addEventListener('click', () => {
     Net.leave();
@@ -5623,6 +5847,7 @@ function boot() {
       if (UI.isStealing()) UI.resolveSteal(null);
       else if (UI.isAiming()) UI.closeAim();
       if (!$('#help').hidden) $('#help').hidden = true;
+      if (!$('#settings').hidden) $('#settings').hidden = true;
     }
   });
 
@@ -5639,6 +5864,28 @@ function boot() {
     $('#btn-music').textContent = off ? '音樂：關' : '音樂：開';
     $('#btn-music').setAttribute('aria-pressed', String(off));
   });
+  // 設定：畫質與角色外觀（存在這台瀏覽器裡）
+  const seg = (id, key, apply) => {
+    const box = $(id);
+    const mark = () => box.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === Settings.get()[key])));
+    box.addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      Settings.set({ [key]: b.dataset.v });
+      apply(b.dataset.v);
+      SFX.play('pickup');
+      mark();
+    });
+    mark();
+  };
+  seg('#opt-quality', 'quality', v => World.setQuality(v));
+  // 對局中的雙人：畫面上的莊家是對手，不跟著換
+  seg('#opt-skin', 'skin', v => { if (!(Game.s && Game.s.mp && !Game.s.over)) World.setDealerSkin(v); });
+  const openSettings = () => { $('#settings').hidden = false; $('#settings-close').focus(); };
+  $('#btn-settings').addEventListener('click', openSettings);
+  $('#btn-settings2').addEventListener('click', openSettings);
+  $('#settings-close').addEventListener('click', () => { $('#settings').hidden = true; });
+
   $('#btn-help').addEventListener('click', () => { $('#help').hidden = false; $('#help-close').focus(); });
   $('#help-close').addEventListener('click', () => { $('#help').hidden = true; });
 
@@ -5654,6 +5901,7 @@ function boot() {
 function backToTitle() {
   const $ = sel => document.querySelector(sel);
   $('#end').hidden = true;
+  World.setDealerSkin(Settings.get().skin);
   Net.reset();
   if (Game.s) { Game.s.over = true; Game.s.busy = true; }
   UI.setInteractive(false);
@@ -5665,6 +5913,17 @@ function backToTitle() {
   SFX.music(0);
   $('#btn-start').focus();
 }
+
+// 設定存在 localStorage；被封鎖或在無痕視窗裡就只記在這次
+const Settings = (() => {
+  const dft = { quality: 'high', skin: 'pale' };
+  let cur = dft;
+  try { cur = Object.assign({}, dft, JSON.parse(localStorage.getItem('dr-settings') || '{}')); } catch (e) { /* 用預設值 */ }
+  return {
+    get: () => cur,
+    set(p) { cur = Object.assign({}, cur, p); try { localStorage.setItem('dr-settings', JSON.stringify(cur)); } catch (e) { /* 只記在這次 */ } },
+  };
+})();
 
 function showFatal(err) {
   const el = document.querySelector('#fatal');
