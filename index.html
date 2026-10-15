@@ -279,7 +279,7 @@ b.blank { color: var(--blank); }
 }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-10-15 11:54" };</script>
+<script>window.BUILD = { target: "web", at: "2026-10-15 13:30" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -1158,8 +1158,8 @@ const SFX = (() => {
     // 從鋪了牌桌絨布的桌上拿起來：沒有撞擊，只有手指和東西擦過絨布的一下「沙」（低沉、很短）
     pickup() {
       const k = 0.85 + Math.random() * 0.3;
-      noise(0.13, { type: 'bandpass', freq: 720 * k, to: 420 * k, q: 0.9, gain: 0.32, attack: 0.04 });
-      noise(0.06, { type: 'lowpass', freq: 260, to: 120, gain: 0.45, attack: 0.012, when: 0.01 });
+      noise(0.13, { type: 'bandpass', freq: 720 * k, to: 420 * k, q: 0.9, gain: 0.5, attack: 0.04 });
+      noise(0.06, { type: 'lowpass', freq: 260, to: 120, gain: 0.7, attack: 0.012, when: 0.01 });
     },
     // 介面按鈕（選單、設定）：原本「拿道具」的錄音
     uiclick() {
@@ -1207,8 +1207,8 @@ const SFX = (() => {
     // 只剩低頻的悶響，加一點幾乎聽不到的布料摩擦。w 是重量感（1 道具，槍用 1.6：更低、更大聲、更長）
     place(w = 1) {
       const k = (0.9 + Math.random() * 0.2) / Math.sqrt(w);
-      noise(0.06 + 0.03 * w, { type: 'lowpass', freq: 380 * k, to: 110 * k, q: 0.5, gain: 1.4 * w, attack: 0.005 });
-      noise(0.05 + 0.03 * w, { type: 'lowpass', freq: 160 * k, to: 70, q: 0.5, gain: 1.2 * w * w, attack: 0.006 });
+      noise(0.06 + 0.03 * w, { type: 'lowpass', freq: 380 * k, to: 110 * k, q: 0.5, gain: 2.2 * w, attack: 0.005 });
+      noise(0.05 + 0.03 * w, { type: 'lowpass', freq: 160 * k, to: 70, q: 0.5, gain: 1.9 * w * w, attack: 0.006 });
       noise(0.07, { type: 'bandpass', freq: 1100, q: 0.7, gain: 0.018, attack: 0.02, when: 0.005 });
     },
     thud() { tone(70, 0.4, { to: 35, gain: 1 }); noise(0.25, { freq: 400, gain: 0.6 }); },
