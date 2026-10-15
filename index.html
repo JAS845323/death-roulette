@@ -279,7 +279,7 @@ b.blank { color: var(--blank); }
 }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-10-15 13:33" };</script>
+<script>window.BUILD = { target: "web", at: "2026-10-15 13:35" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -421,8 +421,8 @@ b.blank { color: var(--blank); }
         </div>
         <h2>演出速度</h2>
         <div class="seg speed" id="opt-speed">
-          <button type="button" data-v="1">1×<small>慢慢看</small></button>
-          <button type="button" data-v="1.1">1.1×<small>標準</small></button>
+          <button type="button" data-v="0.8">0.8×<small>標準</small></button>
+          <button type="button" data-v="1">1×<small>稍快</small></button>
           <button type="button" data-v="1.3">1.3×<small>快一點</small></button>
           <button type="button" data-v="1.6">1.6×<small>熟練的玩家</small></button>
         </div>
@@ -6849,13 +6849,13 @@ function backToTitle() {
 
 // 設定存在 localStorage；被封鎖或在無痕視窗裡就只記在這次
 const Settings = (() => {
-  const dft = { quality: 'high', skin: 'dealer', speed: '1.1' };
+  const dft = { quality: 'high', skin: 'dealer', speed: '0.8' };
   let cur = dft;
   try { cur = Object.assign({}, dft, JSON.parse(localStorage.getItem('dr-settings') || '{}')); } catch (e) { /* 用預設值 */ }
   // 舊版存的是膚色名字，換成角色
   if (!['dealer', 'widow', 'butcher', 'crone'].includes(cur.skin)) cur.skin = 'dealer';
   // 選項改過（舊版的 1.25、2 不見了）就回到預設
-  if (!['1', '1.1', '1.3', '1.6'].includes(cur.speed)) cur.speed = '1.1';
+  if (!['0.8', '1', '1.3', '1.6'].includes(cur.speed)) cur.speed = '0.8';
   return {
     get: () => cur,
     set(p) { cur = Object.assign({}, cur, p); try { localStorage.setItem('dr-settings', JSON.stringify(cur)); } catch (e) { /* 只記在這次 */ } },
