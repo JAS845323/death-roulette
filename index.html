@@ -279,7 +279,7 @@ b.blank { color: var(--blank); }
 }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-10-15 09:57" };</script>
+<script>window.BUILD = { target: "web", at: "2026-10-15 11:46" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -678,6 +678,42 @@ const SFX = (() => {
     ringOut.gain.value = 0.85;
     for (const [fr, gn] of [[3870, 0.05], [5150, 0.018]]) {
       tone(fr, 1.1 + 1.8 * k, { type: 'sine', gain: gn * (0.5 + 0.5 * k), attack: 0.06, when: 0.04, dest: ringOut });
+    }
+  }
+
+  // 電弧：兩個略微走音的低頻鋸齒波經過飽和失真、帶通，振幅忽大忽小地衰減（電流的嗡嗡聲）；
+  // 上面撒一串越來越稀的細碎火花。dur 秒，gain 總音量
+  let arcCurve = null;
+  function arc(dur, gain, when = 0) {
+    const t = ctx.currentTime + when;
+    if (!arcCurve) {
+      arcCurve = new Float32Array(1024);
+      for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; arcCurve[i] = Math.tanh(x * 5) / Math.tanh(5); }
+    }
+    const sh = ctx.createWaveShaper(); sh.curve = arcCurve;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1300; bp.Q.value = 0.7;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5200;
+    const g = ctx.createGain();
+    // 包絡：3ms 衝上去，之後指數衰減，中間每一小段隨機抖動
+    const n = 48, env = new Float32Array(n);
+    for (let i = 0; i < n; i++) env[i] = (i === 0 ? 0 : Math.exp(-i / n * 4.2) * (0.45 + 0.55 * Math.random())) * gain;
+    env[n - 1] = 0;
+    g.gain.setValueAtTime(0, t);
+    g.gain.setValueCurveAtTime(env, t + 0.003, dur);
+    for (const [f0, f1, det] of [[118, 74, 0], [124, 78, 0.4]]) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0 + det, t);
+      o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      const og = ctx.createGain(); og.gain.value = 0.8;
+      o.connect(og); og.connect(sh);
+      o.start(t); o.stop(t + dur + 0.05);
+    }
+    sh.connect(bp); bp.connect(lp); lp.connect(g);
+    out(g, 0.35);
+    // 火花：1～5ms 的高頻噪音點，前密後疏
+    for (let i = 0; i < 26; i++) {
+      const u = Math.pow(Math.random(), 1.8);
+      noise(0.001 + Math.random() * 0.004, { type: 'bandpass', freq: 2800 + Math.random() * 3200, q: 1.2, gain: gain * (0.25 + Math.random() * 0.5) * (1 - u * 0.7), attack: 0.0005, when: when + u * dur * 0.9 });
     }
   }
 
@@ -1083,7 +1119,7 @@ const SFX = (() => {
       noise(0.03, { type: 'highpass', freq: 3000, gain: 0.6 }); tone(1600, 0.03, { type: 'square', gain: 0.12 }); noise(0.03, { type: 'highpass', freq: 2500, gain: 0.4, when: 0.07 });
     },
     rack() {
-      if (smp('rack', { gain: 0.95, wet: 0.25 })) return;
+      if (smp('rack', { gain: 0.68, wet: 0.25 })) return;
       noise(0.07, { type: 'bandpass', freq: 1400, q: 2, gain: 0.8, wet: 0.3 });
       tone(220, 0.06, { type: 'square', gain: 0.06 });
       noise(0.08, { type: 'bandpass', freq: 900, q: 2, gain: 0.9, when: 0.2, wet: 0.3 });
@@ -1091,10 +1127,21 @@ const SFX = (() => {
     },
     load() { noise(0.05, { type: 'bandpass', freq: 2600, q: 3, gain: 0.5 }); tone(700, 0.05, { type: 'triangle', gain: 0.15 }); },
     drop() { tone(2400 + Math.random() * 600, 0.15, { type: 'triangle', gain: 0.08 }); tone(1800, 0.1, { type: 'triangle', gain: 0.05, when: 0.09 }); },
+    // 小電擊（過期藥物失敗）：短短一下電弧＋輕的悶響
     zap() {
-      const rec = smp('zap', { gain: 0.9, wet: 0.3 });
-      for (let i = 0; i < 8; i++) tone(80 + Math.random() * 400, 0.06, { type: 'sawtooth', gain: rec ? 0.09 : 0.18, when: i * 0.05 });
-      noise(0.45, { type: 'highpass', freq: 3000, gain: rec ? 0.15 : 0.3 });
+      noise(0.006, { type: 'highpass', freq: 2200, gain: 0.35, attack: 0.0005 });
+      arc(0.22, 0.36);
+      tone(90, 0.18, { to: 45, gain: 0.22, attack: 0.003 });
+    },
+    // 除顫器電下去：放電的「喀」＋低頻的「碰」、身體被電得一震的悶響、短促的電弧、電容放完電高頻往下掉
+    defib() {
+      noise(0.012, { type: 'highpass', freq: 1800, gain: 0.85, attack: 0.0008 });
+      noise(0.03, { type: 'bandpass', freq: 3200, q: 1, gain: 0.3, attack: 0.001 });
+      tone(150, 0.16, { to: 45, gain: 0.55, attack: 0.002 });
+      tone(66, 0.5, { to: 33, gain: 0.55, attack: 0.004, wet: 0.3 });
+      noise(0.24, { freq: 320, to: 110, gain: 0.32, attack: 0.003, wet: 0.2 });
+      arc(0.36, 0.6, 0.004);
+      tone(2400, 0.55, { to: 240, gain: 0.03, attack: 0.01, when: 0.06, wet: 0.6 });
     },
     charge() { tone(300, 0.35, { type: 'square', to: 900, gain: 0.08 }); tone(1200, 0.12, { type: 'sine', gain: 0.08, when: 0.32 }); },
     heartbeat() {
@@ -1132,7 +1179,23 @@ const SFX = (() => {
     medicine() { for (let i = 0; i < 10; i++) noise(0.02, { type: 'highpass', freq: 3000, gain: 0.3, when: i * 0.04 + Math.random() * 0.02 }); },
     flatline() { tone(980, 2.6, { type: 'sine', gain: 0.12, attack: 0.01 }); },
     ecg() { tone(980, 0.12, { type: 'sine', gain: 0.14 }); },
-    whine() { tone(300, 1.3, { type: 'sine', to: 2600, gain: 0.08, attack: 0.3 }); tone(305, 1.3, { type: 'triangle', to: 2650, gain: 0.04, attack: 0.3 }); },
+    // 除顫器充電：兩個略微走音的音往上爬（帶一點二次泛音），滿了之後兩聲「準備好」的嗶；
+    // d 是到電下去還有幾秒（演出速度不同時跟著縮短），嗶聲在電下去之前
+    whine(d = 1.4) {
+      const up = Math.max(0.5, d - 0.3);
+      tone(320, up + 0.05, { type: 'sine', to: 2900, gain: 0.065, attack: up * 0.3 });
+      tone(326, up + 0.05, { type: 'triangle', to: 2950, gain: 0.022, attack: up * 0.3 });
+      tone(640, up + 0.05, { type: 'sine', to: 5800, gain: 0.008, attack: up * 0.4 });
+      tone(2950, 0.2, { type: 'sine', gain: 0.03, when: up, attack: 0.02 });
+      for (const w of [up + 0.02, up + 0.15]) tone(1760, 0.07, { type: 'sine', gain: 0.045, when: w, attack: 0.004, wet: 0.3 });
+    },
+    // 東西放到鋪了布的桌上：悶悶的一下（布把高頻吃掉了），加一點布料摩擦；每次重量感稍微不同
+    place() {
+      const k = 0.85 + Math.random() * 0.3;
+      noise(0.07, { type: 'lowpass', freq: 700 * k, to: 170, q: 0.7, gain: 0.5, attack: 0.002 });
+      tone(118 * k, 0.09, { to: 70 * k, gain: 0.3, attack: 0.002 });
+      noise(0.05, { type: 'bandpass', freq: 2500, q: 0.8, gain: 0.035, attack: 0.008, when: 0.004 });
+    },
     thud() { tone(70, 0.4, { to: 35, gain: 1 }); noise(0.25, { freq: 400, gain: 0.6 }); },
     crush() { noise(0.18, { type: 'bandpass', freq: 2200, q: 1.5, gain: 0.6 }); noise(0.1, { type: 'highpass', freq: 5000, gain: 0.3, when: 0.05 }); tone(180, 0.1, { type: 'square', gain: 0.05 }); },
     sting() { tone(41, 2.5, { type: 'sawtooth', gain: 0.25, wet: 1 }); tone(43.5, 2.5, { type: 'sawtooth', gain: 0.2, wet: 1 }); },
@@ -1186,9 +1249,10 @@ const SFX = (() => {
     creak() { noise(0.6, { type: 'bandpass', freq: 520, to: 340, q: 9, gain: 0.25, wet: 0.4 }); },
   };
 
-  function play(name) {
+  // arg：少數音效的參數（例如充電要多久）
+  function play(name, arg) {
     if (!ctx || muted || !sounds[name]) return;
-    try { sounds[name](); } catch (e) { /* 音效失敗不影響遊戲 */ }
+    try { sounds[name](arg); } catch (e) { /* 音效失敗不影響遊戲 */ }
   }
 
   function toggleMute() {
@@ -1210,6 +1274,9 @@ const SFX = (() => {
     get muted() { return muted; },
     // 已經解碼好的錄音（檢查用）
     samples: () => Object.keys(bufs),
+    // 檢查用：錄下最後輸出（MediaStream）；solo(true) 把環境低鳴與音樂關掉，只聽音效
+    tap() { const d = ctx.createMediaStreamDestination(); deaf.connect(d); return d.stream; },
+    solo(on) { drone.gain.cancelScheduledValues(ctx.currentTime); drone.gain.value = on ? 0 : 0.32; if (mus) mus.bus.gain.value = on ? 0 : musicOut(); },
     // 檢查用：外部音樂的內部狀態（可以直接把 <audio> 拉到循環終點前看接縫）
     debugBgm: () => bgm,
     // 檢查用：現在輸出的音量（dBFS），靜音時是 -Infinity
@@ -1689,7 +1756,6 @@ const Game = {
         if (slot < 0) continue;
         s.items[side][slot] = pool[Math.floor(rand() * pool.length)];
         UI.renderItems(s);
-        SFX.play('pickup');
         await sleep(230);
       }
     }
@@ -4905,6 +4971,7 @@ const World = (() => {
         scene.add(m);
         slots[side][i] = m;
         anim(0.45, t => { m.position.y = (1 - t) * 0.35; }, 'back');
+        wait(0.17).then(() => SFX.play('place'));
       });
     }
   }
@@ -5389,10 +5456,10 @@ const World = (() => {
       R0.arms.forEach(a => { a.rotation.x = -0.25 - 0.9 * t; });
       R0.head.rotation.x = 0.35 * t;
     });
-    SFX.play('whine');
+    SFX.play('whine', 1.1 / speed);
     await wait(1.1);
     for (let k = 0; k < 2; k++) {
-      SFX.play('zap'); SFX.play('thud');
+      SFX.play('defib');
       shake = Math.max(shake, 0.025);
       emit(g.localToWorld(V(0, 0.1, 0.75)), { count: 26, color: 0xcfe8ff, size: 0.016, life: 0.45, vel: V(0, 0.8, 0.3), vspread: 0.8, gravity: 3, grow: 0, opacity: 1 });
       await anim(0.35, t => { R0.zap.intensity = 9 * (1 - t); R0.body.rotation.x = 0.75 - 0.08 * Math.sin(t * PI); });
@@ -6399,10 +6466,9 @@ const UI = (() => {
     await eyes(0.04, 10, 0.35);
     await eyes(0.42, 6, 1.0);
     World.paddlesIn();
-    SFX.play('whine');
+    SFX.play('whine', 1.4 / pace);
     await World.wait(1.4);
-    SFX.play('zap');
-    SFX.play('thud');
+    SFX.play('defib');
     flash('#fx-flash');
     World.paddlesZap();
     await eyes(0, 4, 0.06);
