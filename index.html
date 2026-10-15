@@ -279,7 +279,7 @@ b.blank { color: var(--blank); }
 }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-10-15 15:57" };</script>
+<script>window.BUILD = { target: "web", at: "2026-10-16 00:40" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -2428,16 +2428,20 @@ const SDF = (() => {
   }
 
   // 網格接上時淡入，不要突然冒出來
+  // （畫面被藏起來時 requestAnimationFrame 不會跑，另外用計時器保底，淡入一定會結束，不會卡在透明）
   function fadeIn(mats, dur = 0.6) {
     const t0 = performance.now();
+    let done = false;
     mats.forEach(m => { m.transparent = true; m.opacity = 0; m.needsUpdate = true; });
     const step = () => {
+      if (done) return;
       const t = Math.min(1, (performance.now() - t0) / 1000 / dur);
       mats.forEach(m => { m.opacity = t; });
       if (t < 1) requestAnimationFrame(step);
-      else mats.forEach(m => { m.transparent = false; m.needsUpdate = true; });
+      else { done = true; mats.forEach(m => { m.transparent = false; m.needsUpdate = true; }); }
     };
     requestAnimationFrame(step);
+    setTimeout(() => { if (!done) { done = true; mats.forEach(m => { m.opacity = 1; m.transparent = false; m.needsUpdate = true; }); } }, dur * 1000 + 400);
   }
 
   return {
@@ -3596,10 +3600,10 @@ const WK = (() => {
   //       ear 耳朵（s 大小、out 往外張的角度、lobe 耳垂）、neck 脖子（adam 喉結、tendon 頸部肌腱）
   // eyes：眼白的顏色（dark 原作的黑眼睛、blood 充血、yellow 泛黃、milky 白濁）；glow：瞳孔的光
   // paint：base 膚底色、lip 嘴唇、blood 嘴角流血、tears 黑色淚痕、liner 眼線、wrinkle 皺紋強度、stubble 鬍渣
-  // body：w 寬、d 厚、belly 肚子、chest 胸、shoulder 肩寬、arm 手臂粗細
+  // body：w 寬、d 厚、belly 肚子、chest 胸、shoulder 肩寬、arm 手臂粗細；outfit：服裝（body.js 的 OUTFITS：suit、mourning、apron、shawl）
   const CHARS = {
     dealer: {
-      tint: 0xffffff, rough: 0.5, hair: 'none', eyes: 'dark', glow: 0xfff4d0,
+      tint: 0xffffff, rough: 0.5, hair: 'none', eyes: 'dark', glow: 0xfff4d0, outfit: 'suit',
       head: {
         face: { hollow: 0.9, temple: 0.8, cheek: 1.1, jawW: 0.077 },
         eye: { deep: 1.1 },
@@ -3613,14 +3617,14 @@ const WK = (() => {
       body: { w: 1, d: 1, belly: 0, chest: 0, shoulder: 1, arm: 1 },
     },
     widow: {
-      tint: 0xe4eaf4, rough: 0.42, hair: 'long', hairColor: 0x5a3028, eyes: 'blood', glow: 0xfff0e0,
+      tint: 0xe4eaf4, rough: 0.42, hair: 'long', hairColor: 0x5a3028, eyes: 'blood', glow: 0xfff0e0, outfit: 'mourning',
       head: {
         skull: { w: 0.13, h: 0.18, d: 0.158 },
         face: { w: 0.92, cheek: 1.15, hollow: 0.5, temple: 0.4, jawW: 0.077, chinW: 0.8, chinY: -0.004, chinZ: 0.13, chinR: 0.027 },
         brow: { k: 0.55 },
         eye: { x: 0.05, r: 0.025, tilt: -0.12, up: 0.4, low: -0.27 },
         nose: { tipR: 0.012, tipY: 0.133, tipZ: 0.197, bridge: 0.0068, w: 0.016, flare: 0.85 },
-        mouth: { w: 0.046, curve: -0.008, open: 0, up: 0.0078, lo: 0.009, z: 0.175 },
+        mouth: { w: 0.046, curve: -0.008, open: 0, up: 0.0064, lo: 0.0078, z: 0.175 },
         ear: { s: 0.85, out: 0.18 },
         neck: { r: 0.045, adam: 0, tendon: 0.6 },
       },
@@ -3629,7 +3633,7 @@ const WK = (() => {
       body: { w: 0.85, d: 0.92, belly: 0, chest: 0.045, shoulder: 0.9, arm: 0.86 },
     },
     butcher: {
-      tint: 0xf4d8c8, rough: 0.58, hair: 'buzz', hairColor: 0x4a3c32, eyes: 'yellow', glow: 0xffe8c8,
+      tint: 0xf4d8c8, rough: 0.58, hair: 'buzz', hairColor: 0x4a3c32, eyes: 'yellow', glow: 0xffe8c8, outfit: 'apron',
       head: {
         skull: { w: 0.152, h: 0.178, d: 0.17, y: 0.218 },
         face: { w: 1.18, cheek: 1.25, hollow: 0, temple: 0, fat: 1, chin2: 0.85, jawW: 0.108, jawY: 0.035, chinW: 1.4, chinY: -0.02, chinZ: 0.138, chinR: 0.034 },
@@ -3645,7 +3649,7 @@ const WK = (() => {
       body: { w: 1.32, d: 1.38, belly: 0.13, chest: 0, shoulder: 1.22, arm: 1.28 },
     },
     crone: {
-      tint: 0xfff0cc, rough: 0.62, hair: 'bun', hairColor: 0xf2eee6, eyes: 'milky', glow: 0xf4fff0,
+      tint: 0xfff0cc, rough: 0.62, hair: 'bun', hairColor: 0xf2eee6, eyes: 'milky', glow: 0xf4fff0, outfit: 'shawl',
       head: {
         skull: { w: 0.132, h: 0.183, d: 0.162 },
         face: { w: 0.9, cheek: 1.25, hollow: 1.4, temple: 1.2, jawW: 0.08, chinW: 0.85, chinY: -0.022, chinZ: 0.152, chinR: 0.03, length: 1.03 },
@@ -4018,29 +4022,46 @@ const WK = (() => {
     go(a, dir, len, w, depth);
     return out;
   }
-  // 便宜的二維雜訊（每格亂數＋雙線性內插），給皮膚的斑駁
-  function noise2(seed) {
-    const hs = (i, j) => { const v = Math.sin(i * 127.1 + j * 311.7 + seed * 17.3) * 43758.5453; return v - Math.floor(v); };
-    return (x, y) => {
-      const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
-      return (hs(i, j) * (1 - u) + hs(i + 1, j) * u) * (1 - v) + (hs(i, j + 1) * (1 - u) + hs(i + 1, j + 1) * u) * v;
-    };
-  }
-  // 每個像素加斑駁與毛孔（顏色 c、高度 h 兩張一起做）
-  async function skinNoise(gc, gh, P, amt) {
-    const W = P.w, Hh = P.h, ic = gc.getImageData(0, 0, W, Hh), ih = gh.getImageData(0, 0, W, Hh), dc = ic.data, dh = ih.data;
-    const n1 = noise2(1), n2 = noise2(2), n3 = noise2(3);
-    const s = P.su / W;
-    for (let py = 0; py < Hh; py++) for (let px = 0; px < W; px++) {
-      if (px === 0 && (py & 31) === 0) await tick();
-      const x = px * s, y = py * s, i = (py * W + px) * 4;
-      const m = (n1(x * 60, y * 60) * 0.6 + n2(x * 160, y * 160) * 0.4 - 0.5) * 2;
-      const k = 1 + m * 0.16 * amt + (Math.random() - 0.5) * 0.025;
-      const pore = n3(x * 520, y * 520) * 0.7 + n2(x * 1100 + 7, y * 1100) * 0.3;
-      dc[i] *= k; dc[i + 1] *= k; dc[i + 2] *= k * 0.98;
-      dh[i] = dh[i + 1] = dh[i + 2] = Math.max(0, Math.min(255, dh[i] + (pore - 0.5) * 22 + m * 8 + (Math.random() - 0.5) * 3));
+  // 可無縫重複的雜訊圖（值雜訊，格點在邊界繞回來）：cells 一邊幾格、oct 疊幾層；回傳灰階畫布（128 為中間值）
+  function tileNoise(size, cells, oct, seed) {
+    const [c, g] = cvs(size, size), img = g.createImageData(size, size), d = img.data;
+    const hs = (i, j, p) => { i = ((i % p) + p) % p; j = ((j % p) + p) % p; const v = Math.sin(i * 127.1 + j * 311.7 + seed * 17.3 + p * 3.1) * 43758.5453; return v - Math.floor(v); };
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      let v = 0, a = 0.5, tot = 0;
+      for (let o = 0; o < oct; o++) {
+        const p = cells << o, fx = x / size * p, fy = y / size * p, i = Math.floor(fx), j = Math.floor(fy), u = fx - i, w = fy - j;
+        const su = u * u * (3 - 2 * u), sw = w * w * (3 - 2 * w);
+        v += a * ((hs(i, j, p) * (1 - su) + hs(i + 1, j, p) * su) * (1 - sw) + (hs(i, j + 1, p) * (1 - su) + hs(i + 1, j + 1, p) * su) * sw);
+        tot += a; a *= 0.5;
+      }
+      const k = (y * size + x) * 4, val = Math.max(0, Math.min(255, 128 + (v / tot - 0.5) * 300));
+      d[k] = d[k + 1] = d[k + 2] = val; d[k + 3] = 255;
     }
-    gc.putImageData(ic, 0, 0); gh.putImageData(ih, 0, 0);
+    g.putImageData(img, 0, 0);
+    return c;
+  }
+  let noiseTiles = null;
+  // 皮膚的斑駁（約 2 公分的起伏）與毛孔（約 2.5 公釐）：雜訊圖只算一次，之後用「疊加」混合鋪滿整張（比逐像素算快很多）
+  async function skinNoise(gc, gh, P, amt) {
+    if (!noiseTiles) { noiseTiles = { mottle: tileNoise(256, 8, 3, 1), pore: tileNoise(256, 64, 2, 2) }; await tick(); }
+    const lay = (g, tile, alpha, scale) => {
+      g.save();
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalCompositeOperation = 'overlay';
+      g.globalAlpha = alpha;
+      const pat = g.createPattern(tile, 'repeat');
+      pat.setTransform(new DOMMatrix().scale(scale));
+      g.fillStyle = pat;
+      g.fillRect(0, 0, P.w, P.h);
+      g.restore();
+    };
+    // 每像素的大小隨投影不同，換算成實際尺寸：斑駁一格 2 公分、毛孔一格 2.5 公釐
+    const pxPerM = P.w / P.su;
+    lay(gc, noiseTiles.mottle, 0.2 * amt, (0.02 * 8 * pxPerM) / 256);
+    lay(gc, noiseTiles.pore, 0.06, (0.0025 * 64 * pxPerM) / 256);
+    lay(gh, noiseTiles.pore, 0.2, (0.0025 * 64 * pxPerM) / 256);
+    lay(gh, noiseTiles.mottle, 0.12, (0.02 * 8 * pxPerM) / 256);
+    await tick();
   }
 
   async function paint(H, spec) {
@@ -4550,7 +4571,7 @@ normal = headPerturb(-vViewPosition, normal, dH * uBump * 4.0, faceDirection);`)
     return inst;
   }
 
-  // ---------- 頭髮（階段 3 再重做）：沿用原本的形狀，但貼合新的頭顱 ----------
+  // ---------- 頭髮的底層：貼著頭皮的殼 ----------
   // 把一個網格的頂點沿著從頭顱中心往外的方向，移到頭顱表面外 off 公尺的地方
   function wrap(geo, H, skull, off, keepOut = false) {
     const p = geo.attributes.position, c = V(0, H.skull.y - 0.02, H.skull.z), v = V(), d = V();
@@ -4569,14 +4590,103 @@ normal = headPerturb(-vViewPosition, normal, dH * uBump * 4.0, faceDirection);`)
     geo.computeVertexNormals();
     return geo;
   }
+  // ---------- 頭髮（階段 3）：髮片＝帶透明貼圖的細長薄片，從頭皮沿梳理方向與重力長出來，碰到頭、耳朵、肩膀就往外推 ----------
+  let strandTex = null, fadeTex = null;
+  function hairCardTexture() {
+    if (strandTex) return strandTex;
+    const W = 128, Hh = 512, c = document.createElement('canvas');
+    c.width = W; c.height = Hh;
+    const g = c.getContext('2d');
+    // 一根根頭髮：根部（上面）密、髮尾（下面）稀疏變細
+    for (let i = 0; i < 90; i++) {
+      const x0 = R(3, W - 3), v = R(140, 255) | 0, len = R(0.7, 1) * Hh;
+      g.strokeStyle = `rgba(${v},${v},${v},${R(0.6, 1)})`; g.lineWidth = R(0.8, 2.6); g.lineCap = 'round';
+      g.beginPath(); g.moveTo(x0, 0);
+      g.bezierCurveTo(x0 + R(-5, 5), len * 0.33, x0 + R(-7, 7), len * 0.66, x0 + R(-9, 9), len);
+      g.stroke();
+    }
+    strandTex = new T.CanvasTexture(c);
+    strandTex.encoding = T.sRGBEncoding; strandTex.anisotropy = 8;
+    return strandTex;
+  }
+  // 平頭的髮際線：頭皮殼的邊緣慢慢變透明（UV 的 v 在殼的下緣是 0）
+  function hairlineFade() {
+    if (fadeTex) return fadeTex;
+    const c = document.createElement('canvas');
+    c.width = 4; c.height = 256;
+    const g = c.getContext('2d'), gr = g.createLinearGradient(0, 256, 0, 0);
+    gr.addColorStop(0, '#000'); gr.addColorStop(0.1, '#555'); gr.addColorStop(0.2, '#fff'); gr.addColorStop(1, '#fff');
+    g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
+    for (let i = 0; i < 400; i++) { g.fillStyle = `rgba(0,0,0,${R(0.2, 0.6)})`; g.fillRect(R(0, 4), R(200, 256), 1, 1); }
+    fadeTex = new T.CanvasTexture(c);
+    return fadeTex;
+  }
+  // 一束束頭髮長成網格：roots 每根有 p（頭皮上的點）、dir（一開始的方向）、len（最長）、w（寬）、off（離表面多遠）
+  // field：要避開的東西（頭、耳朵、肩膀）的距離場；step(p, d, k, r) 回傳下一步的方向；stop(p, k) 為 true 就停
+  // every：每幾步才放一節網格（長得一樣、三角形少；長而直的頭髮用）
+  function growStrands(roots, field, { ds = 0.012, step, stop, every = 1 }) {
+    const pos = [], nor = [], uv = [], idx = [];
+    const grad = p => {
+      const e = 0.002;
+      return V(field(p.x + e, p.y, p.z) - field(p.x - e, p.y, p.z), field(p.x, p.y + e, p.z) - field(p.x, p.y - e, p.z), field(p.x, p.y, p.z + e) - field(p.x, p.y, p.z - e)).normalize();
+    };
+    for (const r of roots) {
+      const pts = [], ns = [];
+      let p = r.p.clone(), d = r.dir.clone().normalize();
+      const n0 = Math.ceil(r.len / ds);
+      for (let k = 0; k <= n0; k++) {
+        // 推到表面外 off（多推幾次，凹處一次推不出來）
+        for (let it = 0; it < 4; it++) {
+          const f = field(p.x, p.y, p.z), need = r.off - f;
+          if (need <= 0) break;
+          p.addScaledVector(grad(p), need + 0.0005);
+        }
+        pts.push(p.clone());
+        ns.push(grad(p));
+        if (stop && stop(p, k)) break;
+        d = step(p, d, k, r).normalize();
+        p = p.clone().addScaledVector(d, ds);
+      }
+      if (every > 1) {
+        const last = pts.length - 1;
+        for (let k = last; k > 0; k--) if (k % every && k !== last) { pts.splice(k, 1); ns.splice(k, 1); }
+      }
+      if (pts.length < 2) continue;
+      const base = pos.length / 3, m = pts.length;
+      for (let k = 0; k < m; k++) {
+        const t = pts[Math.min(m - 1, k + 1)].clone().sub(pts[Math.max(0, k - 1)]).normalize();
+        const side = V().crossVectors(t, ns[k]).normalize();
+        const w = r.w * (1 - 0.45 * (k / (m - 1)));
+        for (const s of [-0.5, 0.5]) {
+          const q = pts[k].clone().addScaledVector(side, s * w);
+          pos.push(q.x, q.y, q.z); nor.push(ns[k].x, ns[k].y, ns[k].z); uv.push(s + 0.5, 1 - k / (m - 1));
+        }
+        if (k < m - 1) { const a = base + k * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+      }
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
+    geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    geo.computeBoundingSphere();
+    return geo;
+  }
+  // 頭皮上的點：從頭顱中心往方向（仰角 e、方位 a，a = 0 朝前）找頭顱表面
+  function scalpPoint(S, c, e, a) {
+    const d = V(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
+    let lo = 0, hi = 0.45;
+    for (let k = 0; k < 24; k++) { const t = (lo + hi) / 2; if (S.skull(c.x + d.x * t, c.y + d.y * t, c.z + d.z * t) < 0) lo = t; else hi = t; }
+    return c.clone().addScaledVector(d, hi);
+  }
   function fitHair(inst) {
     const { H, S, spec } = inst.built;
     if (spec.hair === 'none') return;
     const parent = inst.bones[B.head];
-    const mat = std(spec.hairColor, { map: tex.hair, roughness: spec.hair === 'buzz' ? 0.9 : 0.42, envMap: env.tex, envMapIntensity: spec.hair === 'buzz' ? 0.2 : 0.7, side: T.DoubleSide });
     const c = V(0, H.skull.y - 0.02, H.skull.z);
-    // 頭皮上的一層：球面的一部分（從頭頂往下到 len），前面的髮際線往上、後面往下，再貼到頭顱外 off
-    const cap = (len, off, tilt) => {
+    const capMat = std(spec.hairColor, { map: tex.hair, roughness: spec.hair === 'buzz' ? 0.9 : 0.6, envMap: env.tex, envMapIntensity: 0.25, side: T.DoubleSide });
+    // 頭皮上的一層：球面的一部分（從頭頂往下到 len），前面的髮際線往上、後面往下，再貼到頭顱外 off（髮片底下補縫用）
+    const cap = (len, off, tilt, mat = capMat) => {
       const g = new T.SphereGeometry(0.2, 64, 32, 0, PI * 2, 0, len);
       g.rotateX(-tilt);
       g.translate(c.x, c.y, c.z);
@@ -4584,40 +4694,84 @@ normal = headPerturb(-vViewPosition, normal, dH * uBump * 4.0, faceDirection);`)
       parent.add(m);
       return m;
     };
+    if (spec.hair === 'buzz') {
+      // 平頭：短髮殼，邊緣（髮際線）慢慢淡掉
+      const m = std(spec.hairColor, { map: tex.hair, alphaMap: hairlineFade(), transparent: true, depthWrite: false, roughness: 0.95, envMap: env.tex, envMapIntensity: 0.15 });
+      cap(1.6, 0.0028, 0.2, m).renderOrder = 1;
+      return;
+    }
+    const cardMat = std(spec.hairColor, { map: hairCardTexture(), alphaTest: 0.4, side: T.DoubleSide, roughness: 0.5, envMap: env.tex, envMapIntensity: 0.5 });
+    // 要避開的東西：頭（含臉、耳朵）與上半身（身體的距離場在莊家的座標，頭的轉軸在 y = 0.62）
+    const torso = WK.Body.shape(WK.Body.layout(spec)).base;
+    const field = (x, y, z) => Math.min(S.sdf(x, y, z), y < 0 ? torso(x, y + 0.62, z) : 1);
+    const down = V(0, -1, 0), roots = [];
+    const jit = () => R(-0.05, 0.05);
+    const darker = k => std(new T.Color(spec.hairColor).multiplyScalar(k), { map: tex.hair, roughness: 0.7, side: T.DoubleSide });
     if (spec.hair === 'long') {
-      cap(1.42, 0.007, 0.42);
-      // 瀏海：額頭前一片，蓋到眉毛上面
-      const bang = new T.SphereGeometry(0.2, 40, 12, PI / 2 - 0.95, 1.9, 0.3, 0.92);
-      bang.translate(c.x, c.y, c.z);
-      parent.add(mesh(wrap(bang, H, S.skull, 0.011), mat));
-      // 後面垂到肩膀的直髮：從耳後繞到另一邊耳後，前面留空
-      const cur = new T.CylinderGeometry(H.skull.w * 1.0, H.skull.w * 1.5, 0.5, 48, 10, true, 1.95, PI * 2 - 3.9);
-      cur.scale(1, 1, H.skull.d / H.skull.w * 1.0);
-      cur.translate(0, H.skull.y - 0.2, H.skull.z - 0.02);
-      parent.add(mesh(wrap(cur, H, S.skull, 0.012, true), mat));
-    } else if (spec.hair === 'buzz') {
-      cap(1.55, 0.0035, 0.2);
-    } else if (spec.hair === 'bun') {
-      cap(1.55, 0.006, 0.18);
-      // 髮髻盤在頭頂偏後
-      const dir = V(0, 0.82, -0.57).normalize();
-      let a = 0, b = 0.4;
-      for (let k = 0; k < 26; k++) { const t = (a + b) / 2; if (S.skull(c.x + dir.x * t, c.y + dir.y * t, c.z + dir.z * t) < 0) a = t; else b = t; }
-      const top = c.clone().addScaledVector(dir, b);
-      const bun = mesh(new T.SphereGeometry(0.075, 24, 16), mat);
-      bun.scale.set(1, 0.8, 0.95); bun.position.copy(top).addScaledVector(dir, 0.04); parent.add(bun);
-      const pin = mesh(new T.CylinderGeometry(0.0036, 0.0036, 0.17, 6), std(0x2a1d12, { roughness: 0.6 }));
-      pin.rotation.z = 1.2; pin.position.copy(bun.position); parent.add(pin);
-      // 幾縷散落的白髮，垂在耳後
-      for (const sgn of [-1, 1]) for (const dz of [-0.05, -0.08]) {
-        const pts = [];
-        for (let k = 0; k <= 6; k++) {
-          const t = k / 6;
-          pts.push(V(sgn * (H.skull.w + 0.012 + 0.03 * t + 0.008 * Math.sin(t * 9 + dz * 100)), H.skull.y + 0.08 - t * 0.25, H.skull.z + dz + 0.008 * Math.sin(t * 7)));
-        }
-        const g = new T.TubeGeometry(new T.CatmullRomCurve3(pts), 24, 0.0055, 6);
-        parent.add(mesh(wrap(g, H, S.skull, 0.012, true), mat, false));
+      cap(1.3, 0.004, 0.45, darker(0.55));
+      const brow = H.brow.y;
+      for (let e = -0.55; e <= 1.55; e += 0.07) for (let a = -PI; a < PI; a += 0.075) {
+        const ea = e + jit(), aa = a + jit(), ab = Math.abs(aa);
+        // 髮際線：前額高、兩側在耳朵上面、後面到後頸
+        const line = ab < 0.95 ? 0.5 + 0.12 * ab : ab < 2.0 ? 0.22 : -0.5;
+        if (ea < line || ea > 1.57) continue;
+        const p = scalpPoint(S, c, ea, aa);
+        const bang = ab < 0.95 && ea < 0.95;
+        roots.push({
+          p, bang,
+          dir: bang ? V(0, -0.6, 0.8) : V(Math.sign(p.x) * 0.5, -0.35, -0.8),
+          len: bang ? 0.12 : 0.52 + R(-0.04, 0.04), w: R(0.014, 0.02), off: 0.004 + R(0, 0.007),
+        });
       }
+      const geo = growStrands(roots, field, {
+        step: (p, d, k, r) => {
+          if (r.bang) return d.multiplyScalar(0.7).addScaledVector(down, 0.3);
+          // 兩側的頭髮先往後梳、塞到耳朵後面（還在耳朵前面或上面時幾乎不往下掉），過了耳朵才順著重力往下
+          if (p.z > H.ear.z - 0.05 && p.y > H.ear.y - 0.08) return d.multiplyScalar(0.55).add(V(0, -0.12, -0.45));
+          return d.multiplyScalar(0.72).addScaledVector(down, 0.28);
+        },
+        every: 2,
+      });
+      // 瀏海停在眉毛上面
+      const ps = geo.attributes.position;
+      for (let i = 0; i < ps.count; i++) if (ps.getY(i) < brow + 0.012 && ps.getZ(i) > H.eye.z - 0.01) ps.setY(i, brow + 0.012);
+      parent.add(mesh(geo, cardMat));
+    } else if (spec.hair === 'bun') {
+      cap(1.55, 0.004, 0.18, darker(0.6));
+      // 髮髻盤在頭頂偏後：所有頭髮貼著頭皮往髮髻梳
+      const ax = V(0, 0.82, -0.57).normalize(), top = scalpPoint(S, c, Math.asin(ax.y), Math.atan2(ax.x, ax.z)), Bc = top.clone().addScaledVector(ax, 0.035);
+      for (let e = -0.45; e <= 1.4; e += 0.08) for (let a = -PI; a < PI; a += 0.085) {
+        const ea = e + jit(), aa = a + jit(), ab = Math.abs(aa);
+        const line = ab < 0.95 ? 0.55 + 0.1 * ab : ab < 2.0 ? 0.2 : -0.4;
+        if (ea < line) continue;
+        const p = scalpPoint(S, c, ea, aa);
+        if (p.distanceTo(Bc) < 0.07) continue;
+        roots.push({ p, dir: Bc.clone().sub(p), len: p.distanceTo(Bc) + 0.02, w: R(0.016, 0.022), off: 0.004 + R(0, 0.004) });
+      }
+      parent.add(mesh(growStrands(roots, field, { ds: 0.01, step: (p, d) => Bc.clone().sub(p).normalize().multiplyScalar(0.6).add(d.multiplyScalar(0.4)), stop: p => p.distanceTo(Bc) < 0.05 }), cardMat));
+      // 髮髻：一團芯，外面繞幾圈髮片
+      const core = mesh(new T.SphereGeometry(0.052, 24, 16), darker(0.75));
+      core.position.copy(Bc).addScaledVector(ax, 0.01); core.scale.set(1, 0.75, 1); parent.add(core);
+      const u = V().crossVectors(ax, V(1, 0, 0)).normalize(), v = V().crossVectors(ax, u);
+      const coilField = (x, y, z) => Math.hypot(x - core.position.x, (y - core.position.y) / 0.75, z - core.position.z) * 0.85 - 0.052;
+      const coils = [];
+      for (let k = 0; k < 7; k++) {
+        const ph = k / 7 * PI * 2, h = R(-0.02, 0.02);
+        coils.push({ p: core.position.clone().addScaledVector(u, Math.cos(ph) * 0.058).addScaledVector(v, Math.sin(ph) * 0.058).addScaledVector(ax, h), ph, h, dir: V(0, 1, 0), len: 0.3, w: 0.024, off: 0.004 });
+      }
+      parent.add(mesh(growStrands(coils, coilField, {
+        ds: 0.01,
+        step: (p, d, k, r) => { const ang = r.ph + (k + 1) * 0.19; return core.position.clone().addScaledVector(u, Math.cos(ang) * 0.058).addScaledVector(v, Math.sin(ang) * 0.058).addScaledVector(ax, r.h + k * 0.0012).sub(p); },
+      }), cardMat));
+      const pin = mesh(new T.CylinderGeometry(0.0036, 0.0036, 0.17, 6), std(0x2a1d12, { roughness: 0.6 }));
+      pin.rotation.z = 1.2; pin.position.copy(core.position); parent.add(pin);
+      // 幾縷散落的亂髮：從太陽穴、後腦垂下來，捲捲的
+      const fly = [];
+      for (let i = 0; i < 12; i++) {
+        const sx = i % 2 ? 1 : -1;
+        fly.push({ p: scalpPoint(S, c, R(0.15, 0.6), sx * R(1.2, 2.4)), dir: V(sx * 0.4, -1, R(-0.3, 0.1)), len: R(0.12, 0.22), w: R(0.004, 0.007), off: 0.008, curl: R(0, 6) });
+      }
+      parent.add(mesh(growStrands(fly, field, { ds: 0.008, step: (p, d, k, r) => d.multiplyScalar(0.8).addScaledVector(down, 0.15).add(V(Math.sin(k * 0.9 + r.curl) * 0.25, 0, Math.cos(k * 0.9 + r.curl) * 0.25)) }), cardMat, false));
     }
   }
 
@@ -4630,6 +4784,474 @@ normal = headPerturb(-vViewPosition, normal, dH * uBump * 4.0, faceDirection);`)
   }
 
   WK.Head = { get, instance, anchors, layout, shape, cache, B, stats: () => Object.fromEntries(Object.entries(cache).map(([k, v]) => [k, v.stats])) };
+})();
+
+</script>
+<script>
+// 身體：穿著衣服的上半身用距離場雕（跟頭、手同一套 sdf.js），袖子是蒙皮的管子（肩、肘兩根骨頭，跟著手臂 IK 擺）。
+// 四套服裝：suit 舊西裝＋襯衫領帶、mourning 高領喪服＋蕾絲、apron 襯衫＋沾血圍裙＋捲袖、shawl 洋裝＋針織披肩。
+// 座標：莊家的座標（D.group：桌面高度 y = 0、+z 朝玩家）；網格放在 D.upper 底下（往前趴時整塊跟著轉）
+(() => {
+  const { T, V, PI, R, M, env } = WK;
+  const { smooth, smin, smax, ell, seg, tube, bounded, tick } = SDF;
+
+  // ---------- 布料貼圖：可無縫重複的 256×256，R 是明暗細節、G 是高度、B 是磨損髒污 ----------
+  function fabricCanvas(kind) {
+    const S = 256, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d', { willReadFrequently: true }), img = g.createImageData(S, S), d = img.data;
+    const hs = (i, j, p, s) => { i = ((i % p) + p) % p; j = ((j % p) + p) % p; const v = Math.sin(i * 127.1 + j * 311.7 + s * 7.7 + p) * 43758.5453; return v - Math.floor(v); };
+    const vn = (x, y, p, s) => { const i = Math.floor(x), j = Math.floor(y), u = x - i, w = y - j, su = u * u * (3 - 2 * u), sw = w * w * (3 - 2 * w); return (hs(i, j, p, s) * (1 - su) + hs(i + 1, j, p, s) * su) * (1 - sw) + (hs(i, j + 1, p, s) * (1 - su) + hs(i + 1, j + 1, p, s) * su) * sw; };
+    // 週期 p 格的值雜訊（座標 0~S）
+    const noise = (x, y, p, s) => vn(x / S * p, y / S * p, p, s);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      let r = 0.6, h = 0.5;
+      const n1 = noise(x, y, 8, 1), n2 = noise(x, y, 32, 2), n3 = noise(x, y, 128, 3);
+      if (kind === 'wool') {
+        // 斜紋：每 4 像素一條斜線
+        const tw = Math.sin((x + y) * PI / 2) * 0.5 + 0.5;
+        r = 0.55 + tw * 0.12 + (n2 - 0.5) * 0.18 + (n3 - 0.5) * 0.1; h = 0.35 + tw * 0.3 + (n3 - 0.5) * 0.3;
+      } else if (kind === 'cotton') {
+        const wv = (Math.sin(x * PI / 1.5) * Math.sin(y * PI / 1.5)) * 0.5 + 0.5;
+        r = 0.7 + wv * 0.08 + (n2 - 0.5) * 0.12; h = 0.45 + wv * 0.25 + (n3 - 0.5) * 0.15;
+      } else if (kind === 'canvas') {
+        const a = Math.sin(x * PI / 2.5), b = Math.sin(y * PI / 2.5), wv = (a * a * 0.5 + b * b * 0.5);
+        r = 0.62 + wv * 0.14 + (n2 - 0.5) * 0.2; h = 0.3 + wv * 0.5;
+      } else if (kind === 'knit') {
+        // 針織：一排排 V 字針目（16 像素一欄、12 像素一列）
+        const cx = (x % 16) - 8, cy = y % 12, v = Math.abs(Math.abs(cx) * 0.75 - (cy - 2)) ;
+        const st = Math.max(0, 1 - v / 3.2) * (Math.abs(cx) > 0.8 ? 1 : 0.4);
+        r = 0.45 + st * 0.45 + (n2 - 0.5) * 0.12; h = 0.2 + st * 0.75;
+      } else if (kind === 'crepe') {
+        r = 0.6 + (n1 - 0.5) * 0.12 + (n3 - 0.5) * 0.08; h = 0.5 + (n3 - 0.5) * 0.18;
+      } else if (kind === 'lace') {
+        // 蕾絲：一圈圈小花（32 像素一朵）＋網眼
+        const fx = (x % 32) - 16, fy = (y % 32) - 16, rr = Math.hypot(fx, fy), pet = Math.abs(Math.sin(Math.atan2(fy, fx) * 3)) * 6 + 5;
+        const flower = rr < pet ? 1 : 0, ring = Math.abs(rr - 12) < 1.2 ? 0.8 : 0;
+        const net = (x % 6 < 1 || y % 6 < 1) ? 0.6 : 0;
+        const m = Math.max(flower, ring, net);
+        r = 0.25 + m * 0.6; h = 0.15 + m * 0.8;
+      } else if (kind === 'silk') {
+        const st = ((x + y) % 24) < 6 ? 1 : 0;
+        r = 0.55 + st * 0.25 + (n3 - 0.5) * 0.06; h = 0.5;
+      }
+      const wear = Math.max(0, (n1 - 0.55) * 2.6) * (0.6 + n2 * 0.4);
+      const k = (y * S + x) * 4;
+      d[k] = Math.max(0, Math.min(255, r * 255)); d[k + 1] = Math.max(0, Math.min(255, h * 255)); d[k + 2] = Math.max(0, Math.min(255, wear * 255)); d[k + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    const t = new T.CanvasTexture(c);
+    t.wrapS = t.wrapT = T.RepeatWrapping;
+    t.anisotropy = 8;
+    return t;
+  }
+  const fabrics = {};
+  const fabric = kind => fabrics[kind] || (fabrics[kind] = fabricCanvas(kind));
+
+  // 布料材質：在網格自己的座標（綁定姿勢）做三面投影；頂點的 fab 屬性決定三種布料各佔多少，顏色由頂點顏色給
+  function fabricMaterial(kinds, scales, o = {}) {
+    const m = new T.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: o.rough ?? 0.9, metalness: 0, side: o.side || T.FrontSide });
+    const tx = kinds.map(fabric);
+    m.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, { tF0: { value: tx[0] }, tF1: { value: tx[1] }, tF2: { value: tx[2] }, uFs: { value: new T.Vector3(...scales) }, uFB: { value: o.bump ?? 0.6 }, uDirt: { value: o.dirt ?? 0.5 } });
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute vec3 fab;\nvarying vec3 vFab;\nvarying vec3 vRest;\nvarying vec3 vRestN;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFab = fab;\nvRest = position;\nvRestN = normal;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>
+varying vec3 vFab;
+varying vec3 vRest;
+varying vec3 vRestN;
+uniform sampler2D tF0, tF1, tF2;
+uniform vec3 uFs;
+uniform float uFB, uDirt;
+vec4 tri(sampler2D t, float s, vec3 w) {
+  return texture2D(t, vRest.zy * s) * w.x + texture2D(t, vRest.xz * s) * w.y + texture2D(t, vRest.xy * s) * w.z;
+}
+vec3 fabPerturb(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDir) {
+  vec3 vSigmaX = dFdx(surf_pos), vSigmaY = dFdy(surf_pos);
+  vec3 R1 = cross(vSigmaY, surf_norm), R2 = cross(surf_norm, vSigmaX);
+  float fDet = dot(vSigmaX, R1) * faceDir;
+  vec3 vGrad = sign(fDet) * (dHdxy.x * R1 + dHdxy.y * R2);
+  return normalize(abs(fDet) * surf_norm - vGrad);
+}`)
+        .replace('#include <map_fragment>', `
+vec3 tw = pow(abs(normalize(vRestN)), vec3(4.0));
+tw /= tw.x + tw.y + tw.z;
+vec4 fs = tri(tF0, uFs.x, tw) * vFab.x + tri(tF1, uFs.y, tw) * vFab.y + tri(tF2, uFs.z, tw) * vFab.z;
+float fabH = fs.g;
+diffuseColor.rgb *= fs.r * 1.55;
+diffuseColor.rgb *= mix(vec3(1.0), vec3(0.78, 0.68, 0.52), fs.b * uDirt);`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB * 0.004, faceDirection);`);
+    };
+    m.customProgramCacheKey = () => 'fabric:' + kinds.join(',');
+    return m;
+  }
+
+  // ---------- 服裝：顏色（線性 RGB 的倍率）與布料 ----------
+  const OUTFITS = {
+    // 頂點顏色是線性 RGB（0.02 大約是螢幕上的深灰黑）
+    suit: { fab: ['wool', 'cotton', 'silk'], scale: [18, 22, 14], col: { main: [0.016, 0.014, 0.013], shirt: [0.2, 0.18, 0.12], tie: [0.07, 0.006, 0.008], lining: [0.004, 0.004, 0.004], button: [0.008, 0.006, 0.005] } },
+    mourning: { fab: ['crepe', 'lace', 'crepe'], scale: [16, 12, 16], col: { main: [0.009, 0.008, 0.011], lace: [0.02, 0.017, 0.022], button: [0.004, 0.004, 0.004], lining: [0.003, 0.003, 0.003] } },
+    apron: { fab: ['cotton', 'canvas', 'cotton'], scale: [20, 16, 20], col: { main: [0.16, 0.14, 0.105], apron: [0.26, 0.23, 0.17], strap: [0.2, 0.18, 0.13], blood: [0.07, 0.004, 0.004], lining: [0.01, 0.009, 0.008] } },
+    shawl: { fab: ['wool', 'knit', 'wool'], scale: [18, 9, 18], col: { main: [0.014, 0.016, 0.012], shawl: [0.07, 0.04, 0.045], brooch: [0.2, 0.12, 0.03], lining: [0.004, 0.004, 0.004] } },
+  };
+
+  // ---------- 上半身的距離場 ----------
+  function layout(spec) {
+    const b = spec.body, hd = WK.Head.layout(spec);
+    return {
+      b, outfit: spec.outfit || 'suit',
+      W: 0.2 * b.w, Dp: 0.14 * b.d, sh: b.shoulder, arm: b.arm,
+      neckR: hd.neck.r, neckZ: hd.neck.z + 0.008,
+    };
+  }
+  // 從 (x, y, z0) 沿 +z（或 -z）找到表面（距離場 = off）的 z
+  function surfZ(f, x, y, sgn = 1, off = 0) {
+    let a = 0, b = 0.5;
+    for (let k = 0; k < 28; k++) { const t = (a + b) / 2; if (f(x, y, sgn * t) < off) a = t; else b = t; }
+    return sgn * b;
+  }
+  // 從 c 沿 dir 往外走到距離場 = off 的地方
+  function surfAlong(f, c, dir, off = 0) {
+    let a = 0, b = 0.5;
+    for (let k = 0; k < 28; k++) { const t = (a + b) / 2; if (f(c.x + dir.x * t, c.y + dir.y * t, c.z + dir.z * t) < off) a = t; else b = t; }
+    return c.clone().addScaledVector(dir, b);
+  }
+  function shape(L) {
+    const { b, W, Dp, sh, arm, neckR, neckZ, outfit } = L;
+    const parts = [
+      [ell([0, 0.24, 0], W * 1.05, 0.25, Dp * 1.05), 0],
+      // 上胸到肩膀的寬度（肩膀不是兩顆球黏在旁邊）
+      [ell([0, 0.36, -0.01], W * 1.12 * Math.max(1, sh * 0.95), 0.1, Dp * 0.92), 0.07],
+      [ell([0, -0.06, 0.004 + b.belly * 0.5], W * 0.98 + b.belly * 0.55, 0.3, Dp + b.belly), 0.08],
+      [ell([0, -0.42, 0], W * 1.12, 0.3, Dp * 1.08), 0.08],
+      [ell([0, 0.3, -0.035], W * 0.95, 0.2, Dp * 0.86), 0.06],
+      // 脖子底：衣領圍著頭的脖子
+      [seg([0, 0.4, neckZ - 0.005], [0, 0.465, neckZ], neckR + 0.014, neckR + 0.012), 0.05],
+    ];
+    for (const sx of [1, -1]) {
+      // 斜方肌（脖子到肩膀的斜坡）、三角肌（肩膀）、胸
+      parts.push([seg([sx * 0.035, 0.49, -0.03], [sx * 0.2 * sh, 0.44, -0.006], 0.045, 0.05), 0.06]);
+      parts.push([ell([sx * 0.228 * sh, 0.39, 0.01], 0.058 * arm * (outfit === 'mourning' ? 1.15 : 1), 0.07 * arm * (outfit === 'mourning' ? 1.1 : 1), 0.068 * arm), 0.08]);
+      if (b.chest > 0.01) parts.push([ell([sx * 0.072, 0.27, Dp * 0.62], 0.07 * b.chest / 0.045, 0.066, 0.068 * b.chest / 0.045), 0.05]);
+      else parts.push([ell([sx * 0.085, 0.31, Dp * 0.55], 0.085, 0.065, 0.05), 0.06]);
+    }
+    const base = SDF.blend(parts);
+    const col = OUTFITS[outfit].col;
+
+    // ---- 各套服裝的細節：都寫成「從基本外形往外推多少」或另外加的形狀 ----
+    const zf = (x, y) => surfZ(base, x, y, 1);
+    const extra = [];       // [fn, k, tag]
+    let offset = () => 0;   // 往外推（公尺）
+    // 衣服本身的部位顏色：[部位, 比例] 的組合（邊界用平滑的遮罩，頂點之間才不會鋸齒）
+    let mixOf = () => [['main', 1]];
+    // 被一層布（圍裙、披肩）蓋住的地方：身體表面與那層布的內面，看不到
+    let covered = () => false;
+    if (outfit === 'suit') {
+      // 西裝外套比基本外形厚 6 公釐；前面 V 字領口裡是襯衫（不推）、翻領再厚一點、領帶
+      const vHalf = y => 0.075 * smooth(0.16, 0.47, y);
+      const inV = (x, y, z) => z > 0 ? smooth(0.004, -0.004, Math.abs(x) - vHalf(y)) * smooth(0.15, 0.17, y) : 0;
+      const lapel = (x, y, z) => z > 0 ? smooth(0.045, 0.03, Math.abs(x) - vHalf(y)) * smooth(-0.002, 0.004, Math.abs(x) - vHalf(y)) * smooth(0.2, 0.26, y) * smooth(0.5, 0.46, y) : 0;
+      const tieW = y => 0.012 + 0.012 * smooth(0.44, 0.2, y);
+      const tie = (x, y, z) => z > 0 ? smooth(0.002, -0.002, Math.abs(x) - tieW(y)) * smooth(0.13, 0.15, y) * smooth(0.47, 0.45, y) : 0;
+      offset = (x, y, z) => 0.006 * (1 - inV(x, y, z)) + 0.004 * lapel(x, y, z) + 0.0035 * tie(x, y, z);
+      const soft = (x, y, z, w) => z > 0 ? smooth(w, -w, Math.abs(x) - vHalf(y)) * smooth(0.15, 0.175, y) : 0;
+      const tieC = (x, y, z) => z > 0 ? smooth(0.004, -0.004, Math.abs(x) - tieW(y)) * smooth(0.13, 0.15, y) * smooth(0.47, 0.45, y) : 0;
+      mixOf = (x, y, z) => { const t = tieC(x, y, z), v = soft(x, y, z, 0.006) * (1 - t); return [['tie', t], ['shirt', v], ['main', 1 - t - v]]; };
+      // 襯衫領子：圍著脖子的一圈＋前面兩個領尖；領帶結；外套鈕扣
+      const ring = [];
+      for (let i = 0; i <= 16; i++) { const a = (i / 16) * PI * 2, cz = Math.cos(a), sx = Math.sin(a); ring.push([sx * (neckR + 0.011), 0.468 + 0.02 * (1 - cz) * 0.5 - 0.004 * cz, neckZ + cz * (neckR + 0.011)]); }
+      extra.push([tube(ring, ring.map(() => 0.0075)), 0.006, 'shirt']);
+      for (const sx of [1, -1]) extra.push([SDF.ellip(SDF.frameOf(new T.Matrix4().makeRotationZ(sx * 0.5).setPosition(sx * 0.024, 0.452, neckZ + neckR + 0.006)), [0, 0, 0], 0.016, 0.022, 0.005), 0.004, 'shirt']);
+      extra.push([ell([0, 0.448, zf(0, 0.448) + 0.004], 0.013, 0.012, 0.009), 0.004, 'tie']);
+      for (const y of [0.12, 0.03]) extra.push([ell([0.012, y, zf(0.012, y) + 0.006], 0.008, 0.008, 0.004), 0.002, 'button']);
+    } else if (outfit === 'mourning') {
+      // 喪服貼身；高領包住脖子、領口一圈蕾絲；胸前一排小鈕扣；上胸是蕾絲
+      offset = (x, y, z) => 0.003 + 0.0018 * (y > 0.33 && z > 0 ? smooth(0.33, 0.36, y) : 0);
+      mixOf = (x, y, z) => { const l = smooth(0.33, 0.35, y) * smooth(0.48, 0.465, y) * smooth(-0.045, -0.01, z); return [['lace', l], ['main', 1 - l]]; };
+      extra.push([seg([0, 0.44, neckZ], [0, 0.545, neckZ - 0.003], neckR + 0.008, neckR + 0.006), 0.012, 'main']);
+      const frill = bounded([0, 0.552, neckZ, neckR + 0.03], (x, y, z) => {
+        const dx = x, dz = z - neckZ, a = Math.atan2(dx, dz), rr = Math.hypot(dx, dz) - (neckR + 0.012);
+        return Math.hypot(rr, (y - 0.552) * 1.3) - (0.0065 + 0.0025 * Math.sin(a * 22));
+      });
+      extra.push([frill, 0.003, 'lace']);
+      for (let y = 0.42; y > 0.02; y -= 0.04) extra.push([ell([0, y, zf(0, y) + 0.004], 0.0055, 0.0055, 0.0045), 0.0015, 'button']);
+    } else if (outfit === 'apron') {
+      // 襯衫＋圍裙：圍裙是離身體 1.6 公分的一片布（有厚度），從胸口蓋到下面；兩條帶子掛過肩膀繞到後面
+      offset = () => 0.003;
+      const apronTop = x => 0.42 - 0.24 * smooth(0.08, 0.2, Math.abs(x));
+      const apronRegion = (x, y, z) => Math.max(Math.abs(x) - (W * 1.06), y - apronTop(x), 0.01 - z);
+      // 圍裙從肚子最凸的地方直直往下垂（不貼著肚子往內收）：肚子以下把身體換成一面垂直的牆再往外 2 公分
+      const yb = -0.03, zb = surfZ(base, 0, yb);
+      const hang = (x, y, z) => smin(base(x, y, z), Math.max(z - (zb - 0.06 * (x / W) ** 2), y - yb), 0.04);
+      const sheet = bounded([0, -0.05, 0.1, 0.65], (x, y, z) => smax(Math.abs(hang(x, y, z) - 0.02) - 0.0055, apronRegion(x, y, z), 0.006));
+      extra.push([sheet, 0.004, 'apron']);
+      covered = (x, y, z) => apronRegion(x, y, z) < -0.006 && hang(x, y, z) < 0.02 - 0.0025;
+      // 帶子：從圍裙上緣的兩角往上繞過肩膀到背後（在 x = ±0.09 的平面上，從胸腔中心往外找表面）
+      for (const sx of [1, -1]) {
+        const pts = [];
+        for (let i = 0; i <= 10; i++) {
+          const ph = 0.15 + (i / 10) * (PI - 0.6), c = V(sx * 0.09, 0.36, -0.01), dir = V(0, Math.sin(ph), Math.cos(ph));
+          const p = surfAlong(base, c, dir, 0.004);
+          pts.push([p.x, p.y, p.z]);
+        }
+        extra.push([tube(pts, pts.map(() => 0.0055)), 0.004, 'strap']);
+      }
+      // 脖子後面掛圍裙的帶子
+      const ring = [];
+      for (let i = 0; i <= 10; i++) { const a = PI * 0.6 + (i / 10) * PI * 0.8; ring.push([Math.sin(a) * (neckR + 0.02), 0.48, neckZ + Math.cos(a) * (neckR + 0.02)]); }
+      extra.push([tube(ring, ring.map(() => 0.0055)), 0.006, 'strap']);
+      // 襯衫領口
+      const nl = [];
+      for (let i = 0; i <= 16; i++) { const a = (i / 16) * PI * 2; nl.push([Math.sin(a) * (neckR + 0.01), 0.462 - 0.008 * Math.max(0, Math.cos(a)), neckZ + Math.cos(a) * (neckR + 0.01)]); }
+      extra.push([tube(nl, nl.map(() => 0.006)), 0.006, 'main']);
+    } else if (outfit === 'shawl') {
+      // 洋裝＋針織披肩：披肩是離身體 2 公分、厚 1.6 公分的一層，蓋住肩膀與上背，前面兩片斜斜交叉；前面中間一個胸針
+      offset = () => 0.003;
+      const edgeY = (x, z) => {
+        const front = smooth(-0.04, 0.06, z), ax = Math.abs(x);
+        return front * (0.19 + 0.9 * Math.max(0, 0.12 - ax)) + (1 - front) * (0.05 + 0.55 * ax);
+      };
+      const region = (x, y, z) => edgeY(x, z) - y;
+      const sheet = bounded([0, 0.35, 0, 0.5], (x, y, z) => smax(Math.abs(base(x, y, z) - 0.013) - 0.0062, region(x, y, z), 0.007));
+      extra.push([sheet, 0.006, 'shawl']);
+      covered = (x, y, z) => region(x, y, z) < -0.008 && base(x, y, z) < 0.013 - 0.0025;
+      extra.push([ell([0, 0.3, zf(0, 0.3) + 0.032], 0.012, 0.014, 0.008), 0.003, 'brooch']);
+    }
+    // 布料的皺褶：坐著時腰間橫向的皺、腋下往胸口斜的皺、背後直的皺
+    const folds = (x, y, z) => {
+      let f = 0;
+      f += 0.0022 * Math.sin(y * 95 + 5 * Math.sin(x * 11)) * smooth(0.14, 0.04, y) * smooth(-0.12, -0.02, y) * smooth(-0.02, 0.06, z);
+      const ax = Math.abs(x);
+      f += 0.0016 * Math.sin((y + ax * 0.9) * 130) * smooth(0.1, 0.17, ax) * smooth(0.2, 0.3, y) * smooth(0.4, 0.33, y);
+      f += 0.0015 * Math.sin(x * 70) * smooth(0, -0.06, z) * smooth(0.25, 0.05, y);
+      return f;
+    };
+    const sdf = (x, y, z) => {
+      let d = base(x, y, z) - offset(x, y, z) + folds(x, y, z);
+      for (const [f, k] of extra) {
+        const bb = f.b;
+        if (bb) { const dx = x - bb[0], dy = y - bb[1], dz = z - bb[2]; if (dx * dx + dy * dy + dz * dz > (bb[3] + k + Math.max(0, d)) ** 2) continue; }
+        d = smin(d, f(x, y, z), k);
+      }
+      // 底部封起來（桌子底下看不到，但從桌邊往下看時不會看到網格的開口）
+      return smax(d, -0.4 - y, 0.02);
+    };
+    // 這一點是哪個部位（上色、選布料）
+    const region = (x, y, z) => {
+      let best = 0.004, tag = null;
+      for (const [f, , t] of extra) { const v = f(x, y, z); if (v < best) { best = v; tag = t; } }
+      return tag ? [[tag, 1]] : mixOf(x, y, z);
+    };
+    return { sdf, base, region, col, outfit, covered };
+  }
+
+  // ---------- 袖子：沿 +y 的管子（肩膀在 0、手肘在 ARM_UP、手腕在 ARM_UP + ARM_FORE），切面一圈 N 點 ----------
+  const ARM_UP = 0.35, ARM_FORE = 0.31, ARM_L = ARM_UP + ARM_FORE, N = 24;
+  // 每個角色的袖子輪廓：[y, 半徑, 部位, 皺褶量]；部位 'main' 是袖子的布、'cuff' 是露出來的襯衫袖口、'lining' 是袖口裡面、'skin' 是捲袖露出的前臂
+  function sleeveProfile(L) {
+    const a = L.arm, out = L.outfit, P = [];
+    const rUp = y => (0.05 + (0.043 - 0.05) * (y / ARM_UP)) * a;
+    const rFore = y => (0.043 + (0.037 - 0.043) * ((y - ARM_UP) / ARM_FORE)) * a;
+    const r = y => (y < ARM_UP ? rUp(y) : rFore(y)) * (out === 'mourning' && y < 0.1 ? 1 + 0.25 * smooth(0.1, 0, y) : 1);
+    // 肩膀那頭收成圓頂（藏在身體的肩膀裡）
+    P.push([-0.045, 0.001, 'main', 0], [-0.04, r(0) * 0.55, 'main', 0], [-0.025, r(0) * 0.86, 'main', 0]);
+    if (out === 'apron') {
+      // 捲袖：袖子捲到手肘上面一點，捲起來的那圈布比較厚；前臂是皮膚
+      const yr = ARM_UP + 0.035;
+      for (let y = -0.01; y < yr - 0.035; y += 0.01) P.push([y, r(y), 'main', 1]);
+      P.push([yr - 0.03, r(yr) + 0.006, 'main', 0.3], [yr - 0.02, r(yr) + 0.012, 'main', 0.2], [yr - 0.008, r(yr) + 0.013, 'main', 0.2], [yr + 0.002, r(yr) + 0.008, 'main', 0], [yr + 0.006, r(yr) * 0.8, 'skin', 0]);
+      for (let y = yr + 0.015; y <= ARM_L + 0.005; y += 0.012) {
+        const t = (y - yr) / (ARM_L - yr);
+        P.push([y, (0.039 - 0.017 * smooth(0, 1, t)) * a, 'skin', 0]);
+      }
+      P.push([ARM_L + 0.02, 0.015 * a, 'skin', 0]);
+      return P;
+    }
+    for (let y = -0.01; y < ARM_L - 0.015; y += 0.01) P.push([y, r(y), 'main', 1]);
+    // 袖口：有厚度，裡面是暗的；襯衫（或蕾絲）袖口從裡面露出來一點
+    const rc = r(ARM_L) * 1.05;
+    const cuffTag = out === 'suit' ? 'cuff' : out === 'mourning' ? 'lace' : 'main';
+    P.push([ARM_L - 0.012, rc, 'main', 0.5], [ARM_L - 0.002, rc, 'main', 0], [ARM_L + 0.002, rc - 0.003, 'main', 0], [ARM_L - 0.004, rc - 0.0055, 'lining', 0], [ARM_L - 0.03, rc - 0.0065, 'lining', 0]);
+    if (out === 'suit' || out === 'mourning') {
+      const rs = rc - 0.009;
+      P.push([ARM_L - 0.032, rs, cuffTag, 0], [ARM_L + 0.012, rs, cuffTag, 0], [ARM_L + 0.016, rs - 0.003, cuffTag, 0], [ARM_L + 0.012, rs - 0.006, 'lining', 0], [ARM_L - 0.02, rs - 0.007, 'lining', 0]);
+    }
+    P.push([ARM_L - 0.05, 0.004, 'lining', 0]);
+    return P;
+  }
+  function sleeveGeometry(L, S) {
+    const P = sleeveProfile(L), col = S.col, fabIdx = OUTFITS[L.outfit].fab;
+    const pos = [], nor = [], colr = [], fab = [], uv = [], si = [], sw = [], idx = [];
+    const grp = { cloth: [], skin: [] };
+    // 皺褶：手肘內側擠出幾道橫紋、袖子沿途斜斜的布紋、袖口附近堆起來
+    const wr = (y, a) => {
+      const inner = Math.max(0, Math.cos(a));   // +z 那面是手肘內側（彎曲時往那邊折）
+      let d = 0;
+      d += 0.0032 * Math.sin((y - ARM_UP) * 160) * Math.exp(-(((y - ARM_UP) / 0.045) ** 2)) * (0.3 + inner);
+      d += 0.0018 * Math.sin(y * 55 + a * 2 + Math.sin(a * 3) * 2) * (0.5 + 0.5 * Math.sin(a * 5 + y * 9));
+      d += 0.0025 * Math.sin(y * 120 + a) * smooth(ARM_L - 0.12, ARM_L - 0.03, y);
+      return d;
+    };
+    const tags = P.map(p => p[2]);
+    for (let r = 0; r < P.length; r++) {
+      const [y, rad, tag, w] = P[r];
+      for (let k = 0; k <= N; k++) {
+        const a = (k / N) * PI * 2;
+        const rr = rad + (w ? wr(y, a) * w * L.arm : 0);
+        pos.push(Math.sin(a) * rr, y, Math.cos(a) * rr);
+        nor.push(0, 0, 0);
+        const c = tag === 'skin' ? [1, 1, 1] : col[tag === 'cuff' ? 'shirt' : tag] || col.main;
+        colr.push(...c);
+        const fi = tag === 'cuff' || tag === 'lace' ? 1 : 0;
+        fab.push(fi === 0 ? 1 : 0, fi === 1 ? 1 : 0, 0);
+        uv.push(k / N * 3, y * 8);
+        // 骨頭：0 上臂、1 手肘（轉一半）、2 前臂
+        const t = smooth(ARM_UP - 0.06, ARM_UP + 0.06, y);
+        si.push(0, 1, 2, 0); sw.push((1 - t) * (1 - t), 2 * t * (1 - t), t * t, 0);
+      }
+    }
+    for (let r = 0; r < P.length - 1; r++) {
+      const list = (tags[r] === 'skin' && tags[r + 1] === 'skin') ? grp.skin : grp.cloth;
+      for (let k = 0; k < N; k++) {
+        const a = r * (N + 1) + k, b = a + N + 1;
+        list.push(a, b, a + 1, a + 1, b, b + 1);
+      }
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
+    geo.setAttribute('color', new T.Float32BufferAttribute(colr, 3));
+    geo.setAttribute('fab', new T.Float32BufferAttribute(fab, 3));
+    geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+    geo.setAttribute('skinIndex', new T.Uint16BufferAttribute(si, 4));
+    geo.setAttribute('skinWeight', new T.Float32BufferAttribute(sw, 4));
+    geo.setIndex([...grp.cloth, ...grp.skin]);
+    geo.addGroup(0, grp.cloth.length, 0);
+    if (grp.skin.length) geo.addGroup(grp.cloth.length, grp.skin.length, 1);
+    geo.computeVertexNormals();
+    geo.computeBoundingSphere();
+    geo.boundingSphere.radius += 0.4;
+    return geo;
+  }
+
+  // ---------- 雕一個角色的身體（快取；跟頭共用排隊） ----------
+  // 格子大小：有一層厚約 1.1～1.2 公分的布（圍裙、披肩）要 6 公釐，格子再大，同一格裡會同時有布的內外兩面，
+  // 頂點被投影到相反的面、三角形翻過來，布上出現一個個小洞（7 公釐時屠夫 293 個、瘋婆 191 個翻面的三角形）；其他服裝用 7 公釐（三角形少約 27%）
+  const H_GRID = { suit: 0.007, mourning: 0.007, apron: 0.006, shawl: 0.006 };
+  async function sculpt(spec) {
+    const t0 = performance.now();
+    SDF.startSlice();
+    const L = layout(spec), S = shape(L), O = OUTFITS[L.outfit];
+    // 雕到桌面下 40 公分（底部封起來）
+    // 前面依肚子大小留空間（屠夫的肚子加圍裙往前凸到 0.42）
+    const lo = [-0.4, -0.43, -0.27], hi = [0.4, 0.62, Math.max(0.32, 0.075 + L.Dp + L.b.belly * 1.5 + 0.06)];
+    const h = H_GRID[L.outfit] || 0.006;
+    const { pos, idx } = await SDF.surfaceNets(S.sdf, lo, hi, h);
+    const n = pos.length / 3;
+    const nor = await SDF.project(pos, S.sdf, h);
+    // 看不到的三角形丟掉：被圍裙、披肩蓋住的身體表面與那層布的內面
+    const keep = [];
+    for (let i = 0; i < idx.length; i += 3) {
+      if ((i & 4095) === 0) await tick();
+      const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3;
+      const cx = (pos[a] + pos[b] + pos[c]) / 3, cy = (pos[a + 1] + pos[b + 1] + pos[c + 1]) / 3, cz = (pos[a + 2] + pos[b + 2] + pos[c + 2]) / 3;
+      if (!S.covered(cx, cy, cz)) keep.push(idx[i], idx[i + 1], idx[i + 2]);
+    }
+    idx.length = 0;
+    for (const v of keep) idx.push(v);
+    const col = new Float32Array(n * 3), fab = new Float32Array(n * 3);
+    const fabOf = { main: 0, shirt: 1, cuff: 1, lace: 1, apron: 1, strap: 1, shawl: 1, tie: 2, button: 0, brooch: 0, blood: 1 };
+    for (let v = 0; v < n; v++) {
+      if ((v & 1023) === 0) await tick();
+      const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2], nx = nor[v * 3], ny = nor[v * 3 + 1], nz = nor[v * 3 + 2];
+      let occ = 0;
+      for (const [d, k] of [[0.008, 0.5], [0.02, 0.3], [0.045, 0.15]]) occ += k * Math.max(0, d - S.sdf(x + nx * d, y + ny * d, z + nz * d)) / d;
+      const ao = Math.max(0.25, 1 - occ * 1.1);
+      const mix = S.region(x, y, z);
+      const c = [0, 0, 0];
+      for (const [tag, w] of mix) {
+        if (w <= 0) continue;
+        let cc = (S.col[tag] || S.col.main);
+        // 圍裙上的血：一團團、往下流
+        if (tag === 'apron') {
+          const bl = WK.fbm(x * 9 + 3, y * 6, z * 9, 3) + 0.25 * WK.fbm(x * 30, y * 4, z * 30, 2) - smooth(0.4, 0.0, y) * 0.15;
+          if (bl > 0.66) cc = cc.map((q, i) => q + (S.col.blood[i] - q) * Math.min(1, (bl - 0.66) * 6));
+        }
+        for (let i = 0; i < 3; i++) c[i] += cc[i] * w;
+        fab[v * 3 + (fabOf[tag] ?? 0)] += w;
+      }
+      // 髒污：一塊塊暗一點
+      const grime = 0.85 + 0.3 * WK.fbm(x * 6, y * 6 + 7, z * 6, 2);
+      col[v * 3] = c[0] * ao * grime; col[v * 3 + 1] = c[1] * ao * grime; col[v * 3 + 2] = c[2] * ao * grime;
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new T.BufferAttribute(nor, 3));
+    geo.setAttribute('color', new T.BufferAttribute(col, 3));
+    geo.setAttribute('fab', new T.BufferAttribute(fab, 3));
+    geo.setIndex(n > 65535 ? new T.Uint32BufferAttribute(idx, 1) : new T.Uint16BufferAttribute(idx, 1));
+    geo.computeBoundingSphere();
+    const mat = fabricMaterial(O.fab, O.scale, { rough: L.outfit === 'mourning' ? 0.75 : 0.92, dirt: L.outfit === 'apron' ? 0.9 : 0.5, bump: L.outfit === 'mourning' ? 0.3 : 0.6 });
+    const sleeve = sleeveGeometry(L, S);
+    return { spec, L, S, geo, mat, sleeve, stats: { verts: n, tris: idx.length / 3, sleeveTris: sleeve.index.count / 3, ms: Math.round(performance.now() - t0) } };
+  }
+  const cache = {}, pending = {};
+  let queue = Promise.resolve();
+  function get(id, spec) {
+    if (cache[id]) return Promise.resolve(cache[id]);
+    if (!pending[id]) pending[id] = queue = queue.then(() => sculpt(spec)).then(r => { cache[id] = r; delete pending[id]; return r; });
+    return pending[id];
+  }
+
+  // ---------- 接到莊家身上 ----------
+  const Q = new T.Quaternion(), X = V(1, 0, 0);
+  function instance(built, group, upper, hip) {
+    const torso = new T.Mesh(built.geo, built.mat);
+    torso.castShadow = true; torso.receiveShadow = true;
+    torso.position.copy(hip).negate();
+    upper.add(torso);
+    const sleeves = [0, 1].map(i => {
+      const root = new T.Bone(), mid = new T.Bone(), fore = new T.Bone();
+      mid.position.y = ARM_UP; root.add(mid); mid.add(fore);
+      group.add(root);
+      const inv = [new T.Matrix4(), new T.Matrix4().makeTranslation(0, -ARM_UP, 0), new T.Matrix4().makeTranslation(0, -ARM_UP, 0)];
+      const m = new T.SkinnedMesh(built.sleeve, [built.mat, M.skin]);
+      m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
+      group.add(m);
+      m.bind(new T.Skeleton([root, mid, fore], inv), new T.Matrix4());
+      return { m, root, mid, fore, axis: V(i ? -1 : 1, 0, 0) };
+    });
+    const yA = V(), zA = V(), xA = V(), fA = V(), mtx = new T.Matrix4();
+    return {
+      built, torso, sleeves,
+      // 第 i 隻手臂：肩膀 S、手肘 E、手腕 W（莊家的座標）
+      arm(i, S, E, W) {
+        const s = sleeves[i];
+        yA.copy(E).sub(S).normalize();
+        fA.copy(W).sub(E).normalize();
+        xA.crossVectors(yA, fA);
+        if (xA.lengthSq() > 1e-6) s.axis.copy(xA.normalize());
+        // 彎曲軸保持跟上臂垂直
+        xA.copy(s.axis).addScaledVector(yA, -s.axis.dot(yA)).normalize();
+        zA.crossVectors(xA, yA);
+        mtx.makeBasis(xA, yA, zA);
+        s.root.position.copy(S);
+        s.root.quaternion.setFromRotationMatrix(mtx);
+        const th = Math.atan2(fA.dot(zA), fA.dot(yA));
+        s.mid.quaternion.setFromAxisAngle(X, th / 2);
+        s.fore.quaternion.setFromAxisAngle(X, th / 2);
+      },
+      remove() {
+        upper.remove(torso);
+        for (const s of sleeves) { group.remove(s.root); group.remove(s.m); }
+      },
+    };
+  }
+
+  WK.Body = { get, instance, cache, layout, shape, OUTFITS, stats: () => Object.fromEntries(Object.entries(cache).map(([k, v]) => [k, v.stats])) };
 })();
 
 </script>
@@ -4988,11 +5610,14 @@ const World = (() => {
     // 雕過的頭馬上換（截圖、預覽同一格就看得到）；沒雕過的雕好再換
     if (WK.Head.cache[charId]) { if (D.headInst?.built !== WK.Head.cache[charId]) attachHead(WK.Head.cache[charId]); }
     else WK.Head.get(charId, spec).then(built => { if (my === headToken) attachHead(built); });
+    // 身體：沒雕過的先用舊的旋轉體輪廓，雕好（body.js）再換
     D.torso.geometry.dispose();
     D.torso.geometry = new T.LatheGeometry(torsoProfile(b), 32);
     D.torso.scale.z = 0.6 * b.d;
-    D.apron.visible = charId === 'butcher';
+    D.apron.visible = charId === 'butcher' && !D.bodyInst;
     if (D.apron.visible) { D.apron.geometry.dispose(); D.apron.geometry = new T.LatheGeometry(torsoProfile(b, 1.02).slice(0, 6), 24, -0.95, 1.9); D.apron.scale.z = 0.6 * b.d; }
+    if (WK.Body.cache[charId]) { if (D.bodyInst?.built !== WK.Body.cache[charId]) attachBody(WK.Body.cache[charId]); }
+    else WK.Body.get(charId, spec).then(built => { if (my === headToken) attachBody(built); });
     D.shoulder[0].x = -0.24 * b.shoulder; D.shoulder[1].x = 0.24 * b.shoulder;
     for (const arm of D.arms) {
       arm.up.scale.x = arm.up.scale.z = b.arm;
@@ -5002,6 +5627,13 @@ const World = (() => {
     }
     skinDirty = true;
     applySkin();
+  }
+  // 雕好的身體（穿著衣服的上身＋袖子）接到莊家身上，舊的旋轉體、衣領、圓柱手臂藏起來
+  function attachBody(built) {
+    if (D.bodyInst) D.bodyInst.remove();
+    D.bodyInst = WK.Body.instance(built, D.group, D.upper, HIP);
+    D.torso.visible = false; D.apron.visible = false; D.collar.visible = false;
+    for (const arm of D.arms) for (const k in arm) arm[k].visible = false;
   }
   // 雕好的頭接到莊家身上：骨頭掛在上半身與頭的轉軸，手指碰撞改用這顆頭的距離場
   function attachHead(built) {
@@ -5063,6 +5695,7 @@ const World = (() => {
     upper.add(torso);
     const collar = mesh(new T.CylinderGeometry(0.075, 0.12, 0.08, 20), M.shirt);
     collar.position.set(0, 0.5 - HIP.y, 0.01); upper.add(collar);
+    D.collar = collar;
     // 頭還沒雕好之前的脖子（頭接上後藏起來，脖子是頭的網格的一部分）
     const neck = mesh(new T.CylinderGeometry(0.048, 0.06, 0.16, 16), M.skin);
     neck.position.set(0, 0.57 - HIP.y, 0); upper.add(neck);
@@ -5238,6 +5871,7 @@ const World = (() => {
     const g = D.group;
     const breathe = Math.sin(time * 1.3);
     D.torso.scale.y = 1 + breathe * 0.008;
+    if (D.bodyInst) D.bodyInst.torso.scale.y = D.torso.scale.y;
     D.head.rotation.y = Math.sin(time * 0.35) * 0.08 + D.look + D.turn;
     D.head.rotation.z = Math.sin(time * 0.27) * 0.04 + D.tilt;
     updateFace(dt);
@@ -5370,6 +6004,7 @@ const World = (() => {
       placeLimb(arm.up, S, elbow);
       placeLimb(arm.fore, elbow, wrist);
       placeLimb(arm.cuff, wrist.clone().addScaledVector(fore, -0.04), wrist.clone().addScaledVector(fore, -0.006));
+      if (D.bodyInst) D.bodyInst.arm(i, S, elbow, wrist);
       // 手銬的環套在手腕最細的地方，環的軸取手與前臂方向的中間
       wristsW.push(g.localToWorld(CUFF_AT.clone().applyQuaternion(q).add(hand.position)));
       D.ringAxis[i].copy(Z_AXIS).applyQuaternion(q).add(fore).transformDirection(g.matrixWorld);
@@ -6889,7 +7524,7 @@ const World = (() => {
       rig: () => ({ pos: rig.pos.toArray(), look: rig.look.toArray(), fov: rig.fov, roll: rig.roll }),
       advance(sec, fps = 60) { const n = Math.round(sec * fps); for (let i = 0; i < n; i++) tick(1 / fps); },
       // 頭雕好、接上了沒
-      headReady: () => !!(D.headInst && WK.Head.cache[charId] === D.headInst.built),
+      headReady: () => !!(D.headInst && WK.Head.cache[charId] === D.headInst.built && D.bodyInst && WK.Body.cache[charId] === D.bodyInst.built),
       // 改了 head.js 之後重新雕（先在頁面裡重新執行 head.js）
       reloadHead() { for (const k in WK.Head.cache) delete WK.Head.cache[k]; setCharacter(charId); },
     },
