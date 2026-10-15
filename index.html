@@ -279,7 +279,7 @@ b.blank { color: var(--blank); }
 }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-10-15 00:52" };</script>
+<script>window.BUILD = { target: "web", at: "2026-10-15 09:57" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -505,10 +505,68 @@ const SFX_DATA = {
 
 </script>
 <script>
+// 這個檔案由 tools/music.py 產生，不要手改。背景音樂的循環點（秒，檔案內的時間）與短音效
+const MUSIC_DATA = {
+  "loops": {
+    "title": {
+      "file": "assets/bgm/title.mp3",
+      "start": 17.508,
+      "end": 84.172,
+      "bpm": 71.93
+    },
+    "round12": {
+      "file": "assets/bgm/round12.mp3",
+      "start": 6.409,
+      "end": 63.994,
+      "bpm": 75.12
+    },
+    "round3": {
+      "file": "assets/bgm/round3.mp3",
+      "start": 18.12,
+      "end": 98.09,
+      "bpm": 75.06
+    },
+    "round3cut": {
+      "file": "assets/bgm/round3cut.mp3",
+      "start": 0.92,
+      "end": 23.327,
+      "bpm": 75.06
+    }
+  },
+  "stings": {
+    "hit1": {
+      "file": "assets/bgm/sting_hit1.mp3",
+      "dur": 3.0
+    },
+    "hit2": {
+      "file": "assets/bgm/sting_hit2.mp3",
+      "dur": 3.0
+    },
+    "riser": {
+      "file": "assets/bgm/sting_riser.mp3",
+      "dur": 24.02
+    },
+    "boom": {
+      "file": "assets/bgm/sting_boom.mp3",
+      "dur": 5.28
+    },
+    "cut": {
+      "file": "assets/bgm/sting_cut.mp3",
+      "dur": 7.8
+    },
+    "pulse": {
+      "file": "assets/bgm/sting_pulse.mp3",
+      "dur": 12.1
+    }
+  }
+};
+
+</script>
+<script>
 // WebAudio 音效、環境低鳴與背景音樂：大部分即時合成；槍機、空包、電擊、槍聲、拿道具、心跳用錄音（script/sfxdata.js）
 const SFX = (() => {
   let ctx = null, master = null, deaf = null, verb = null, noiseBuf = null, drone = null;
-  let muted = false, musicOff = false;
+  let muted = false, musicOff = false, meter = null;
   const bufs = {};   // 解碼好的錄音（還沒好或解碼失敗時就用合成的）
 
   function init() {
@@ -523,7 +581,10 @@ const SFX = (() => {
     deaf.type = 'lowpass'; deaf.frequency.value = 20000; deaf.Q.value = 0.5;
     master.connect(deaf);
     deaf.connect(ctx.destination);
+    // 檢查用：量最後輸出的音量
+    meter = ctx.createAnalyser(); meter.fftSize = 2048; deaf.connect(meter);
     loadSamples();
+    loadStings();
 
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -662,18 +723,26 @@ const SFX = (() => {
     const delay = ctx.createDelay(1.5), fb = ctx.createGain(), dl = ctx.createBiquadFilter();
     fb.gain.value = 0.38; dl.type = 'lowpass'; dl.frequency.value = 2200;
     delay.connect(dl); dl.connect(fb); fb.connect(delay);
-    const dOut = ctx.createGain(); dOut.gain.value = 0.5; dl.connect(dOut); dOut.connect(bus);
+    // 合成音樂的總音量（外部音樂接上時淡掉它）
+    const syn = ctx.createGain(); syn.gain.value = 1; syn.connect(bus);
+    const dOut = ctx.createGain(); dOut.gain.value = 0.5; dl.connect(dOut); dOut.connect(syn);
     // 線路切斷後低音加一點破音
     const shaper = ctx.createWaveShaper(), curve = new Float32Array(1024);
     for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; curve[i] = Math.tanh(x * 3.2) / Math.tanh(3.2); }
     shaper.curve = curve;
-    const bassIn = ctx.createGain(); bassIn.connect(shaper); shaper.connect(bus);
+    const bassIn = ctx.createGain(); bassIn.connect(shaper); shaper.connect(syn);
     // 和弦：低通濾波器緩慢「呼吸」
     const padF = ctx.createBiquadFilter(); padF.type = 'lowpass'; padF.frequency.value = 900; padF.Q.value = 0.5;
     const lfo = ctx.createOscillator(), lg = ctx.createGain();
     lfo.frequency.value = 0.09; lg.gain.value = 380; lfo.connect(lg); lg.connect(padF.frequency); lfo.start();
-    padF.connect(bus);
-    mus = { bus, muffle, duck, delay, bassIn, pad: padF, level: -1, step: 0, next: 0, timer: null, tension: false, vol: 0.3 };
+    padF.connect(syn);
+    // 外部音樂：第一局把高頻收起來（比較暗、比較遠），之後全開
+    const tone2 = ctx.createBiquadFilter(); tone2.type = 'lowpass'; tone2.frequency.value = 20000; tone2.Q.value = 0.5;
+    const fileIn = ctx.createGain(); fileIn.gain.value = 2.2;
+    fileIn.connect(tone2); tone2.connect(bus);
+    mus = { bus, muffle, duck, delay, bassIn, pad: padF, syn, synth: true, fileIn, tone: tone2, level: -1, step: 0, next: 0, timer: null, vol: 0.3 };
+    initBgm();
+    initHeart();
   }
 
   const musicOut = () => (musicOff ? 0 : mus.vol);
@@ -686,6 +755,8 @@ const SFX = (() => {
     if (level == null || level < 0) {
       mus.level = -1;
       mus.bus.gain.setTargetAtTime(0, t, 0.6);
+      bgmStop(2.5);
+      setHeart(0);
       return;
     }
     const was = mus.level;
@@ -694,6 +765,11 @@ const SFX = (() => {
     mus.muffle.frequency.cancelScheduledValues(t);
     mus.muffle.frequency.setTargetAtTime(18000, t, 0.3);
     mus.delay.delayTime.setValueAtTime(60 / BPM[level] * 0.75, t);
+    // 外部音樂載入好了就用它，合成的淡掉；還沒好就先用合成的，好了再換過去
+    const useFile = bgmPlay(level);
+    mus.synth = !useFile;
+    mus.syn.gain.cancelScheduledValues(t);
+    mus.syn.gain.setTargetAtTime(useFile ? 0 : 1, t, useFile ? 0.5 : 0.2);
     if (!mus.timer) {
       mus.next = t + 0.08;
       mus.step = 0;
@@ -707,6 +783,8 @@ const SFX = (() => {
       if (mus.bus.gain.value < 0.002) { clearInterval(mus.timer); mus.timer = null; }
       return;
     }
+    // 外部音樂在播的時候不排合成的音符
+    if (!mus.synth && mus.syn.gain.value < 0.002) { mus.next = ctx.currentTime + 0.05; return; }
     // 分頁在背景時計時器會被節流到約一秒一次，要排得更遠
     const ahead = document.hidden ? 1.6 : 0.15;
     while (mus.next < ctx.currentTime + ahead) {
@@ -720,7 +798,7 @@ const SFX = (() => {
     const L = mus.level, s = i % 16, bar = Math.floor(i / 16);
     const ch = PROG[L >= 3 ? 1 : 0][bar];
     const beat = 60 / BPM[L];
-    const bus = mus.bus;
+    const bus = mus.syn;
     // 墊底和弦：每小節開頭，緩起緩收
     if (s === 0) {
       for (const m of ch.slice(1)) for (const d of [-7, 7]) {
@@ -737,12 +815,6 @@ const SFX = (() => {
     if (L >= 1) {
       const kick = L === 1 ? [0, 8] : L === 2 ? [0, 7, 8] : [0, 4, 8, 12];
       if (kick.includes(s) || (L >= 4 && s === 14)) kickAt(at, L >= 3 ? 0.7 : 0.55);
-    }
-    // 心跳（任何一方電量只剩 1 點時）
-    // 錄音的一次心跳本身就有「噗—通」兩聲，每半小節一次
-    if (mus.tension) {
-      if (bufs.heart) { if (s % 8 === 0) smp('heart', { gain: 1.1, at, dest: bus }); }
-      else if (s === 0 || s === 3) tone(58, 0.2, { to: 38, gain: s === 0 ? 0.55 : 0.4, at, dest: bus });
     }
     // 小鼓
     if (L >= 2 && (s === 4 || s === 12)) {
@@ -779,20 +851,183 @@ const SFX = (() => {
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
     const g2 = ctx.createGain(); g2.gain.value = 0.5;
     o.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(g);
-    g.connect(L >= 4 ? mus.bassIn : mus.bus);
+    g.connect(L >= 4 ? mus.bassIn : mus.syn);
     o.start(at); o2.start(at); o.stop(at + dur + 0.05); o2.stop(at + dur + 0.05);
   }
 
   function kickAt(at, gain) {
-    tone(130, 0.32, { to: 38, gain, at, dest: mus.bus, attack: 0.002 });
-    noise(0.02, { type: 'highpass', freq: 2500, gain: 0.06, at, dest: mus.bus });
+    tone(130, 0.32, { to: 38, gain, at, dest: mus.syn, attack: 0.002 });
+    noise(0.02, { type: 'highpass', freq: 2500, gain: 0.06, at, dest: mus.syn });
   }
 
   function pluck(f, at, gain) {
-    tone(f, 0.5, { type: 'triangle', gain, at, dest: mus.bus, attack: 0.003 });
+    tone(f, 0.5, { type: 'triangle', gain, at, dest: mus.syn, attack: 0.003 });
     tone(f, 0.4, { type: 'triangle', gain: gain * 0.8, at, dest: mus.delay, attack: 0.003 });
     tone(f * 2, 0.18, { type: 'sine', gain: gain * 0.4, at, dest: mus.delay, attack: 0.003 });
   }
+
+  // ---------- 外部背景音樂（assets/bgm/，tools/music.py 切好的循環段） ----------
+  // 每段音樂兩個 <audio> 交替播：播到循環終點時，另一個從循環起點（加上已經超過的時間）開始，交叉淡入。
+  // 用串流播放而不是整首解碼成 AudioBuffer（整首解碼要上百 MB 記憶體，手機吃不消）。
+  // 雙擊 index.html（file://）時瀏覽器不讓 WebAudio 讀本機的音檔，就只用合成的。
+  const LEVEL_TRACK = ['title', 'round12', 'round12', 'round3', 'round3cut'];
+  const XF = 2.2;              // 循環接縫交叉淡入的秒數
+  let bgm = null;
+  const assetUrl = f => (window.ASSET_BASE || '') + f;
+
+  function initBgm() {
+    if (typeof MUSIC_DATA === 'undefined' || location.protocol === 'file:' || !window.Audio) return;
+    bgm = { tracks: {}, active: null, timer: null };
+    for (const [name, d] of Object.entries(MUSIC_DATA.loops)) {
+      const tr = { name, d, els: [], gains: [], cur: 0, ready: false, loaded: false, gain: ctx.createGain(), playing: false, switching: false };
+      tr.gain.gain.value = 0;
+      tr.gain.connect(mus.fileIn);
+      for (let k = 0; k < 2; k++) {
+        const el = new Audio();
+        el.preload = 'none';
+        if (window.ASSET_BASE) el.crossOrigin = 'anonymous';
+        const g = ctx.createGain(); g.gain.value = 0;
+        try { ctx.createMediaElementSource(el).connect(g); } catch (e) { bgm = null; return; }
+        g.connect(tr.gain);
+        el.addEventListener('ended', () => { if (tr.playing && tr.cur === k) loopNow(tr); });
+        tr.els.push(el); tr.gains.push(g);
+      }
+      tr.els[0].addEventListener('canplaythrough', () => {
+        if (tr.ready) return;
+        tr.ready = true;
+        // 正在用合成的代替這段：換過來
+        if (mus.level >= 0 && LEVEL_TRACK[mus.level] === name && mus.synth) music(mus.level);
+      });
+      bgm.tracks[name] = tr;
+    }
+    // 標題與第一、二局的先載，第三局的等開局再載
+    prefetch('title'); prefetch('round12');
+    bgm.timer = setInterval(bgmTick, 80);
+  }
+  function prefetch(name) {
+    const tr = bgm && bgm.tracks[name];
+    if (!tr || tr.loaded) return;
+    tr.loaded = true;
+    tr.els.forEach((el, k) => {
+      el.preload = 'auto';
+      el.src = assetUrl(tr.d.file);
+      // 第二個先停在循環起點，接縫時馬上能播
+      if (k === 1) el.addEventListener('loadedmetadata', () => { el.currentTime = tr.d.start; }, { once: true });
+      el.load();
+    });
+  }
+  function fade(g, to, sec) {
+    const t = ctx.currentTime;
+    g.gain.cancelScheduledValues(t);
+    g.gain.setValueAtTime(g.gain.value, t);
+    g.gain.linearRampToValueAtTime(to, t + sec);
+  }
+  // 播到循環終點：另一個 <audio> 從循環起點接上（對齊已經超過的時間，拍子才不會錯開）
+  function loopNow(tr) {
+    if (tr.switching) return;
+    const a = tr.els[tr.cur], k = 1 - tr.cur, b = tr.els[k];
+    const over = a.ended ? 0 : Math.max(0, Math.min(XF, a.currentTime - tr.d.end));
+    tr.switching = true;
+    b.currentTime = tr.d.start + over;
+    const go = () => {
+      fade(tr.gains[k], 1, XF);
+      fade(tr.gains[tr.cur], 0, XF);
+      const old = tr.cur;
+      tr.cur = k;
+      setTimeout(() => {
+        const e = tr.els[old];
+        if (tr.cur !== old) { e.pause(); e.currentTime = tr.d.start; }
+        tr.switching = false;
+      }, XF * 1000 + 100);
+    };
+    const p = b.play();
+    if (p && p.then) p.then(go, () => { tr.switching = false; }); else go();
+  }
+  function bgmTick() {
+    for (const tr of Object.values(bgm.tracks)) {
+      if (!tr.playing || tr.switching) continue;
+      const el = tr.els[tr.cur];
+      if (!el.paused && el.currentTime >= tr.d.end) loopNow(tr);
+    }
+  }
+  // 換到這個等級的音樂；外部音樂還沒好就回傳 false
+  function bgmPlay(level) {
+    if (!bgm) return false;
+    // 開局後把第三局的也載進來
+    if (level >= 1) { prefetch('round3'); prefetch('round3cut'); }
+    const name = LEVEL_TRACK[level], tr = bgm.tracks[name];
+    if (!tr || !tr.ready) { bgmStop(1.2); return false; }
+    // 第一局暗一點，之後全開
+    const t = ctx.currentTime;
+    mus.tone.frequency.cancelScheduledValues(t);
+    mus.tone.frequency.setTargetAtTime(level === 1 ? 2600 : 20000, t, 1.2);
+    for (const other of Object.values(bgm.tracks)) if (other !== tr && other.playing) stopTrack(other, 1.6);
+    if (!tr.playing) {
+      tr.playing = true;
+      tr.cur = 0;
+      const el = tr.els[0];
+      el.currentTime = 0;
+      tr.gains[0].gain.cancelScheduledValues(t); tr.gains[0].gain.value = 1;
+      tr.gains[1].gain.cancelScheduledValues(t); tr.gains[1].gain.value = 0;
+      fade(tr.gain, 1, bgm.active ? 1.6 : 0.05);
+      const p = el.play();
+      if (p && p.catch) p.catch(() => {});
+    } else fade(tr.gain, 1, 0.8);
+    bgm.active = tr;
+    return true;
+  }
+  function stopTrack(tr, sec) {
+    tr.playing = false;
+    fade(tr.gain, 0, sec);
+    setTimeout(() => { if (!tr.playing) tr.els.forEach(e => e.pause()); }, sec * 1000 + 150);
+  }
+  function bgmStop(sec) {
+    if (!bgm) return;
+    for (const tr of Object.values(bgm.tracks)) if (tr.playing) stopTrack(tr, sec);
+    bgm.active = null;
+  }
+
+  // ---------- 短音效（從 stingers 切出來；跟音樂一起開關） ----------
+  const stingBufs = {};
+  let stingOut = null;
+  function loadStings() {
+    if (typeof MUSIC_DATA === 'undefined' || location.protocol === 'file:') return;
+    stingOut = ctx.createGain(); stingOut.gain.value = musicOff ? 0 : 1; stingOut.connect(master);
+    for (const [name, d] of Object.entries(MUSIC_DATA.stings)) {
+      fetch(assetUrl(d.file)).then(r => r.arrayBuffer()).then(ab => new Promise((res, rej) => {
+        const p = ctx.decodeAudioData(ab, res, rej);
+        if (p && p.then) p.then(res, rej);
+      })).then(b => { stingBufs[name] = b; }).catch(() => {});
+    }
+  }
+  // 播 stinger；可以讓檔案裡第 mark 秒剛好落在 delay 秒之後（例如重擊對準拉桿落下）
+  function sting(name, { gain = 1, delay = 0, mark = 0 } = {}) {
+    if (!ctx || muted || !stingBufs[name]) return false;
+    const off = Math.max(0, mark - delay), when = ctx.currentTime + Math.max(0, delay - mark);
+    const src = ctx.createBufferSource(); src.buffer = stingBufs[name];
+    const g = ctx.createGain(); g.gain.value = gain;
+    src.connect(g); g.connect(stingOut);
+    src.start(when, off);
+    return true;
+  }
+
+  // ---------- 心跳層：獨立排程，速度跟著局勢（第三局一直都在，有人剩 1 點時最快） ----------
+  const heart = { bpm: 0, gain: 0, next: 0, timer: null };
+  function initHeart() {
+    heart.timer = setInterval(() => {
+      if (!heart.bpm || muted) { heart.next = 0; return; }
+      const now = ctx.currentTime, ahead = document.hidden ? 1.6 : 0.2;
+      if (heart.next < now) heart.next = now + 0.05;
+      while (heart.next < now + ahead) {
+        if (!smp('heart', { gain: heart.gain, at: heart.next, dest: mus.bus })) {
+          tone(58, 0.2, { to: 38, gain: 0.55 * heart.gain, at: heart.next, dest: mus.bus });
+          tone(55, 0.2, { to: 36, gain: 0.4 * heart.gain, at: heart.next + 0.28, dest: mus.bus });
+        }
+        heart.next += 60 / heart.bpm;
+      }
+    }, 50);
+  }
+  function setHeart(bpm, gain = 1) { heart.bpm = bpm; heart.gain = gain; }
 
   // 暫時把音樂壓低（瞄準、開槍時）
   function duck(to = 0.3, hold = 0.6, release = 1.5) {
@@ -831,7 +1066,8 @@ const SFX = (() => {
     drone.gain.linearRampToValueAtTime(0.4, t + 4.5);
   }
 
-  function setTension(on) { if (mus) mus.tension = !!on; }
+  // 舊介面：有人剩 1 點電量時加心跳
+  function setTension(on) { setHeart(on ? 100 : 0, 1); }
 
   const sounds = {
     // 槍聲：錄音當中頻（原檔取樣率低、有破音，已濾掉低頻），合成的低頻重擊與房間尾音疊在下面
@@ -965,14 +1201,24 @@ const SFX = (() => {
   function toggleMusic() {
     musicOff = !musicOff;
     if (mus && mus.level >= 0) mus.bus.gain.setTargetAtTime(musicOut(), ctx.currentTime, 0.2);
+    if (stingOut) stingOut.gain.setTargetAtTime(musicOff ? 0 : 1, ctx.currentTime, 0.1);
     return musicOff;
   }
 
   return {
-    init, play, toggleMute, toggleMusic, music, duck, muffle, powerCut, setTension, deafen,
+    init, play, toggleMute, toggleMusic, music, duck, muffle, powerCut, setTension, setHeart, deafen, sting,
     get muted() { return muted; },
     // 已經解碼好的錄音（檢查用）
     samples: () => Object.keys(bufs),
+    // 檢查用：外部音樂的內部狀態（可以直接把 <audio> 拉到循環終點前看接縫）
+    debugBgm: () => bgm,
+    // 檢查用：現在輸出的音量（dBFS），靜音時是 -Infinity
+    level() { if (!meter) return null; const d = new Float32Array(meter.fftSize); meter.getFloatTimeDomainData(d); let e = 0; for (const v of d) e += v * v; return +(10 * Math.log10(e / d.length)).toFixed(1); },
+    // 檢查用：外部音樂各段是否載好、正在播哪段、短音效
+    bgmState: () => ({
+      synth: mus && mus.synth, level: mus && mus.level, heart: heart.bpm, stings: Object.keys(stingBufs),
+      tracks: bgm && Object.fromEntries(Object.values(bgm.tracks).map(t => [t.name, { ready: t.ready, playing: t.playing, cur: t.cur, time: +t.els[t.cur].currentTime.toFixed(2) }])),
+    }),
   };
 })();
 
@@ -5420,6 +5666,7 @@ const World = (() => {
 
   const BRK_CAM = { pos: [-1.08, 1.12, -2.28], look: [-1.42, 0.97, -3.45], fov: 40 };
   async function cutPower() {
+    SFX.sting('cut', { delay: 2.25 / speed, mark: 2.52 });
     await cam(BRK_CAM, 1.6, 'inOut');
     await wait(0.45);
     // 拉桿自己猛地彈下來
@@ -5863,8 +6110,10 @@ const UI = (() => {
     row('player', s.name);
     $('#m-round').textContent = ROMAN[s.round];
     $('#monitor').classList.toggle('cut', s.wiresCut);
-    // 任何一方只剩 1 點電量時，音樂裡加入心跳
-    SFX.setTension(Math.min(s.hp.player, s.hp.dealer) === 1);
+    // 心跳層：第三局一直都在（線路切斷後加快）；任何一方只剩 1 點電量時最快最大聲
+    const low = Math.min(s.hp.player, s.hp.dealer);
+    if (s.round === 3) SFX.setHeart(low <= 1 ? 112 : s.wiresCut ? 92 : 72, low <= 1 ? 1.1 : s.wiresCut ? 0.85 : 0.5);
+    else SFX.setHeart(low <= 1 ? 96 : 0, 0.9);
   }
 
   function renderInfo(s) {
@@ -5961,7 +6210,7 @@ const UI = (() => {
     b.querySelector('.b-sub').textContent = `第 ${r} 局 · 雙方各 ${hp} 點電量${score}${r === 3 ? ' · 電量剩 2 點時，除顫器線路會被切斷' : ''}`;
     b.hidden = false;
     b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
-    SFX.play('sting');
+    if (!SFX.sting('hit1')) SFX.play('sting');
     await World.cam('seat', 2.6, 'inOut');
     b.hidden = true;
   }
@@ -6129,6 +6378,7 @@ const UI = (() => {
   async function dealerDown() {
     World.cam('dealer', 0.5);
     SFX.play('creak');
+    SFX.sting('hit2', { gain: 0.8 });
     SFX.music(-1);
     await World.dealerFall();
     SFX.play('thud');
@@ -6211,7 +6461,7 @@ const UI = (() => {
       SFX.play('victory');
       SFX.music(0);
     } else if (win) { SFX.play('victory'); SFX.music(0); }
-    else { SFX.play('sting'); SFX.music(-1); }
+    else { if (!SFX.sting('boom')) SFX.play('sting'); SFX.music(-1); }
     e.querySelector('button').focus();
   }
 
