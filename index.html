@@ -279,7 +279,7 @@ b.blank { color: var(--blank); }
 }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-10-15 11:46" };</script>
+<script>window.BUILD = { target: "web", at: "2026-10-15 11:50" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -1037,12 +1037,19 @@ const SFX = (() => {
     }
   }
   // 播 stinger；可以讓檔案裡第 mark 秒剛好落在 delay 秒之後（例如重擊對準拉桿落下）
-  function sting(name, { gain = 1, delay = 0, mark = 0 } = {}) {
+  // lp：低通（Hz，讓聲音悶一點）；attack：開頭淡入的秒數（不要一下子衝出來）
+  function sting(name, { gain = 1, delay = 0, mark = 0, lp = 0, attack = 0 } = {}) {
     if (!ctx || muted || !stingBufs[name]) return false;
     const off = Math.max(0, mark - delay), when = ctx.currentTime + Math.max(0, delay - mark);
     const src = ctx.createBufferSource(); src.buffer = stingBufs[name];
-    const g = ctx.createGain(); g.gain.value = gain;
-    src.connect(g); g.connect(stingOut);
+    const g = ctx.createGain();
+    if (attack > 0) { g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(gain, when + attack); } else g.gain.value = gain;
+    let node = src;
+    if (lp > 0) {
+      // 兩級低通，斜率比較陡，中高頻真的收得掉
+      for (let i = 0; i < 2; i++) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp; f.Q.value = 0.6; node.connect(f); node = f; }
+    }
+    node.connect(g); g.connect(stingOut);
     src.start(when, off);
     return true;
   }
@@ -1226,7 +1233,8 @@ const SFX = (() => {
       tone(240, 0.08, { type: 'square', gain: 0.05, when: 0.45 });
     },
     yourturn() { tone(587, 0.5, { type: 'triangle', gain: 0.05, wet: 0.6 }); tone(880, 0.6, { type: 'triangle', gain: 0.04, when: 0.12, wet: 0.6 }); },
-    dealerturn() { tone(110, 0.7, { to: 52, gain: 0.35, wet: 0.7 }); noise(0.35, { freq: 600, to: 120, gain: 0.25, wet: 0.5 }); },
+    // 輪到莊家：低沉、悶悶的一聲，起音放慢一點，不要嚇人
+    dealerturn() { tone(100, 0.75, { to: 50, gain: 0.2, attack: 0.04, wet: 0.6 }); noise(0.4, { freq: 320, to: 100, gain: 0.12, attack: 0.05, wet: 0.4 }); },
     victory() { [62, 65, 69, 74].forEach((m, i) => tone(midi(m), 1.4 - i * 0.2, { type: 'triangle', gain: 0.08, when: i * 0.16, wet: 0.7 })); },
     // 死神現身：低沉的風聲與合唱般的嗡鳴
     reaper() {
@@ -6277,7 +6285,8 @@ const UI = (() => {
     b.querySelector('.b-sub').textContent = `第 ${r} 局 · 雙方各 ${hp} 點電量${score}${r === 3 ? ' · 電量剩 2 點時，除顫器線路會被切斷' : ''}`;
     b.hidden = false;
     b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
-    if (!SFX.sting('hit1')) SFX.play('sting');
+    // 每局開頭：小聲、悶（濾掉中高頻）、開頭淡入，提示換局但不要嚇人
+    if (!SFX.sting('hit1', { gain: 0.3, lp: 500, attack: 0.06 })) SFX.play('sting');
     await World.cam('seat', 2.6, 'inOut');
     b.hidden = true;
   }
