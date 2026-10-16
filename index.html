@@ -127,6 +127,18 @@ b.blank { color: var(--blank); }
 #dialog-text { margin: 0; flex: 1; font-size: 23px; letter-spacing: .04em; line-height: 1.4; min-height: 1.4em; }
 #dialog-text::after { content: '▌'; margin-left: 2px; color: var(--crt); animation: blink 1s steps(2) infinite; }
 
+/* 對面角色的台詞：對話框上方、跟旁白分開 */
+#speech {
+  position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); max-width: 760px;
+  display: flex; align-items: baseline; gap: 12px; padding: 6px 18px; pointer-events: none; z-index: 52;
+  opacity: 0; transition: opacity .35s; text-shadow: 0 0 10px #000, 0 0 3px #000;
+}
+#speech.on { opacity: 1; transition: opacity .12s; }
+#speech .who { font-size: 14px; letter-spacing: .3em; color: var(--live); white-space: nowrap; }
+#speech .txt { font-family: var(--f-serif); font-size: 26px; letter-spacing: .06em; color: #efe6cc; }
+#speech .txt::before { content: '「'; color: var(--dim); }
+#speech .txt::after { content: '」'; color: var(--dim); }
+
 #peek { position: absolute; left: 50%; top: 150px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 10px; animation: peekIn .4s; pointer-events: none; }
 .peek-label { font-family: var(--f-pixel); font-size: 44px; padding: 0 14px; background: rgba(0, 0, 0, .7); }
 .peek-label.live { color: var(--live); }
@@ -279,7 +291,7 @@ b.blank { color: var(--blank); }
 }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-10-16 00:40" };</script>
+<script>window.BUILD = { target: "web", at: "2026-10-16 10:52" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -322,6 +334,7 @@ b.blank { color: var(--blank); }
       <div id="click-text">*咔*</div>
       <div id="item-label"></div>
 
+      <div id="speech" aria-live="polite"><b class="who"></b><span class="txt"></span></div>
       <div id="dialog" aria-live="polite">
         <p id="dialog-text"></p>
         <button id="steal-cancel" type="button" hidden>放棄偷取</button>
@@ -1179,6 +1192,8 @@ const SFX = (() => {
     exhale() { breath(0.9, 0.22, 0, 900, 500); },
     chuckle() { for (let i = 0; i < 3; i++) breath(0.12, 0.2 - i * 0.04, i * 0.17, 1100, 700); },
     tsk() { noise(0.02, { type: 'highpass', freq: 3500, gain: 0.35 }); breath(0.25, 0.1, 0.08, 1000, 700); },
+    // 屠夫折手指的「喀」：很短的關節響，小聲
+    crack() { noise(0.014, { type: 'bandpass', freq: 1900 + Math.random() * 600, q: 2.5, gain: 0.22 }); noise(0.03, { type: 'lowpass', freq: 500, gain: 0.08 }); },
     beep() { tone(880, 0.07, { type: 'square', gain: 0.06 }); },
     deny() { tone(140, 0.18, { type: 'square', gain: 0.1 }); },
     sign() { noise(0.35, { type: 'bandpass', freq: 3000, to: 1200, q: 2, gain: 0.2 }); },
@@ -1691,12 +1706,13 @@ const Game = {
 
   who(w) { return w === 'player' ? '你' : this.s && this.s.mp ? this.s.opp : '莊家'; },
 
-  // opts: { diff: 'easy'|'hard', mp: 雙人連線時 { seed, host, opp } }
+  // opts: { diff: 'easy'|'hard', char: 對面的角色（決定 AI 打法與台詞）, mp: 雙人連線時 { seed, host, opp } }
   async newGame(name, opts = {}) {
     const mp = opts.mp || null;
     rand = mp ? Net.rng(mp.seed) : Math.random;
     this.s = {
       name, diff: opts.diff === 'hard' ? 'hard' : 'easy',
+      char: opts.char || 'dealer', persona: AI.PERSONA[opts.char] || 'calc',
       mp: !!mp, host: mp ? !!mp.host : true, opp: mp ? mp.opp : 'DEALER',
       wins: { player: 0, dealer: 0 },
       stats: { shots: 0, cigs: 0, beers: 0, items: 0, hitsTaken: 0, revives: 0 },
@@ -1782,6 +1798,7 @@ const Game = {
   nextTurn() {
     const s = this.s;
     UI.renderAll(s);
+    UI.event('turn', { who: s.turn });
     if (s.turn === 'player') {
       s.busy = false;
       UI.setInteractive(true);
@@ -1851,7 +1868,7 @@ const Game = {
         const v = s.shells[0];
         s.known[user][0] = v;
         if (me) { UI.renderInfo(s); await UI.peek(v); await UI.say(`你看見了……${shellName(v)}。`); }
-        else await UI.say(s.mp ? `${who}看了一眼，什麼也沒說。` : '莊家看了一眼……「真有意思。」');
+        else { UI.event('peek', { user, v }); await UI.say(s.mp ? `${who}看了一眼，什麼也沒說。` : '莊家看了一眼。'); }
         break;
       }
       case 'cigarettes':
@@ -1861,6 +1878,7 @@ const Game = {
           s.hp[user]++;
           UI.renderHP(s);
           SFX.play('charge');
+          UI.event('heal', { user });
           await UI.say(`${who}回復了 1 點電量。`);
         } else await UI.say('電量本來就是滿的。');
         break;
@@ -1926,11 +1944,13 @@ const Game = {
             s.hp[user] = Math.min(s.max, s.hp[user] + 2);
             UI.renderHP(s);
             SFX.play('charge');
+            UI.event('heal', { user });
             await UI.say(`${who}回復了 2 點電量。`);
           }
         } else {
           s.hp[user] -= 1;
           UI.renderHP(s);
+          UI.event('medBad', { user });
           await UI.hurt(user);
           await UI.say(`藥效不對……${who}失去了 1 點電量。`);
           if (s.hp[user] <= 0) { await this.handleDeath(user); return 'dead'; }
@@ -2028,7 +2048,7 @@ const Game = {
     UI.say(s.mp ? `輪到${s.opp}。` : '莊家的回合。');
     await sleep(700);
     for (let guard = 0; s.mp || guard < 16; guard++) {
-      const a = s.mp ? await this.remoteAction() : AI.decide(s);
+      const a = s.mp ? await this.remoteAction() : AI.decide(s, { persona: s.persona });
       if (a.type === 'item' && a.slot >= 0) {
         const st = await this.useItem('dealer', a.slot, a);
         if (st === 'dead') return;
@@ -2113,64 +2133,306 @@ const Game = {
 
 </script>
 <script>
-// 莊家 AI：會記牌、會用道具，但不會偷看槍膛
+// 莊家 AI：會記牌、會用道具，但不會偷看槍膛。四個角色各有打法（persona）：
+//   calc    莊家：冷靜計算，最接近最佳打法
+//   brute   屠夫：愛鋸槍、愛打你，很少浪費時間拿情報，血剩一半才補
+//   careful 寡婦：保守、愛補血，先拿情報再開槍，不確定時寧可開你也不賭自己
+//   gambler 瘋婆：有藥就吃（血剩 1 也吃），偶爾不照機率亂開、亂用道具
+// decide(s, { side, persona }) 替 side（預設 'dealer'）決定一個動作：
+//   { type: 'item', slot, id, steal? } 或 { type: 'shoot', target: 'player' | 'dealer' }
+// 亂數一律用 Math.random（AI 只在單人用；不能碰 game.js 的共用亂數 rand，雙人的順序才不會亂）
 const AI = {
-  decide(s) {
-    const items = s.items.dealer;
+  PERSONA: { dealer: 'calc', widow: 'careful', butcher: 'brute', crone: 'gambler' },
+
+  decide(s, { side = 'dealer', persona = 'calc' } = {}) {
+    const me = side, opp = me === 'player' ? 'dealer' : 'player';
+    const items = s.items[me];
     const slotOf = id => items.indexOf(id);
-    const has = id => slotOf(id) !== -1;
-    const item = (id, extra = {}) => ({ type: 'item', slot: slotOf(id), id, ...extra });
-
     const n = s.shells.length;
+    const mem = this.memory(s, me);
+    const P = this.TRAITS[persona] || this.TRAITS.calc;
+    const rnd = Math.random;
+
+    // 這發是實彈的機率：已知就是 0／1；不然用剩下的數量（扣掉手機告訴我的後面那幾發）
+    const known = s.known[me];
+    let k = known[0];
     const live = s.shells.filter(Boolean).length;
-    let k = s.known.dealer[0];
-    if (k === undefined) {
-      if (live === 0) k = false;
-      else if (live === n) k = true;
+    let kl = 0, kn = 0;
+    for (let i = 1; i < n; i++) if (known[i] !== undefined) { kn++; if (known[i]) kl++; }
+    let p = n - kn > 0 ? (live - kl) / (n - kn) : 0.5;
+    // 我自己反轉過一發不知道的子彈：機率反過來（真實的數量已經變了，不能拿來算）
+    if (k === undefined && mem.flipped !== null) p = mem.flipped;
+    if (k === undefined) { if (p <= 0) k = false; else if (p >= 1) k = true; }
+    if (k !== undefined) p = k ? 1 : 0;
+
+    const hp = s.hp[me], canHeal = !s.wiresCut;
+    const can = id => {
+      if (slotOf(id) < 0) return false;
+      if (id === 'saw') return !s.sawed;
+      if (id === 'handcuffs') return s.cuffs[opp] === 0 && n > 1;
+      if (id === 'adrenaline') return s.items[opp].some(x => x && x !== 'adrenaline' && this.stealable(s, me, x));
+      if (id === 'phone') return n >= 2;
+      if (id === 'beer') return n >= 1;
+      return true;
+    };
+    const item = (id, extra = {}) => {
+      if (id === 'inverter' && k === undefined) mem.flipped = 1 - p;
+      if (id === 'beer' || id === 'magnifier') mem.flipped = null;
+      return { type: 'item', slot: slotOf(id), id, ...extra };
+    };
+    const shoot = t => { mem.flipped = null; return { type: 'shoot', target: t === 'opp' ? opp : me }; };
+
+    // 瘋婆：偶爾隨便拿一個能用的道具（補血的道具在線路斷了以後不算）
+    if (P.chaos && rnd() < P.chaos) {
+      const any = items.filter((x, i) => x && items.indexOf(x) === i && can(x) && x !== 'adrenaline' && !(canHeal ? false : x === 'cigarettes' || x === 'medicine'));
+      if (any.length) return item(any[Math.floor(rnd() * any.length)]);
     }
-    const hp = s.hp.dealer;
-    const canHeal = !s.wiresCut;
 
-    if (has('cigarettes') && canHeal && hp < s.max) return item('cigarettes');
-    if (has('medicine') && canHeal && hp <= s.max - 2 && hp >= 2 && Math.random() < 0.5) return item('medicine');
+    // 補血
+    if (canHeal && can('cigarettes') && hp <= s.max - P.cigBelow) return item('cigarettes');
+    if (canHeal && can('medicine') && hp <= s.max - P.medGap && hp >= P.medMinHp && rnd() < P.medChance) return item('medicine');
 
-    if (has('adrenaline')) {
-      const steal = this.pickSteal(s, k);
+    // 腎上腺素：偷一個現在最有用的
+    if (can('adrenaline')) {
+      const steal = this.pickSteal(s, k, { side: me, persona });
       if (steal !== null) return item('adrenaline', { steal });
     }
 
-    if (k === undefined && has('magnifier')) return item('magnifier');
-    if (k === undefined && has('phone') && n >= 3 && Math.random() < 0.5) return item('phone');
+    // 情報
+    if (k === undefined && can('magnifier') && rnd() < P.info) return item('magnifier');
+    if (k === undefined && can('phone') && n >= 3 && rnd() < P.info * 0.6) return item('phone');
 
     if (k === true) {
-      if (has('handcuffs') && s.cuffs.player === 0 && n > 1) return item('handcuffs');
-      if (has('saw') && !s.sawed) return item('saw');
-      return { type: 'shoot', target: 'player' };
+      if (can('handcuffs') && rnd() < P.cuffs) return item('handcuffs');
+      if (can('saw') && rnd() < P.sawLive) return item('saw');
+      return shoot('opp');
     }
     if (k === false) {
-      if (has('inverter')) return item('inverter');
-      return { type: 'shoot', target: 'dealer' };
+      if (can('inverter') && rnd() < P.invert) return item('inverter');
+      // 瘋婆偶爾知道是空包還喝掉（浪費）
+      if (P.chaos && can('beer') && rnd() < P.chaos) return item('beer');
+      return shoot('self');
     }
 
-    const p = live / n;
-    if (has('beer') && n > 1 && p > 0.3 && p < 0.7 && Math.random() < 0.6) return item('beer');
-    if (p >= 0.5 && has('handcuffs') && s.cuffs.player === 0 && n > 1) return item('handcuffs');
-    if (p > 0.5 && has('saw') && !s.sawed && Math.random() < 0.5) return item('saw');
-    if (s.sawed || p > 0.5) return { type: 'shoot', target: 'player' };
-    if (p < 0.5) return { type: 'shoot', target: 'dealer' };
-    return { type: 'shoot', target: Math.random() < 0.5 ? 'player' : 'dealer' };
+    // 不知道：先用能改變機率的道具
+    if (can('beer') && n > 1 && p > P.beerLo && p < P.beerHi && rnd() < P.beer) return item('beer');
+    if (can('inverter') && p < 0.5 && rnd() < P.invert * P.invertUnknown) return item('inverter');
+    const toOpp = p >= P.shootOpp;
+    if (toOpp) {
+      if (can('handcuffs') && p >= P.cuffsP && rnd() < P.cuffs) return item('handcuffs');
+      if (can('saw') && p >= P.sawP && rnd() < P.saw) return item('saw');
+    }
+    // 瘋婆：偶爾不照機率亂開
+    if (P.wild && rnd() < P.wild) return shoot(rnd() < 0.5 ? 'opp' : 'self');
+    if (s.sawed) return shoot('opp');
+    if (p === 0.5 && P.coin) return shoot(rnd() < 0.5 ? 'opp' : 'self');
+    return shoot(toOpp ? 'opp' : 'self');
   },
 
-  // 決定要用腎上腺素偷玩家的哪一格道具，沒有好目標時回傳 null
-  pickSteal(s, k) {
-    const pl = s.items.player;
-    const at = id => pl.indexOf(id);
-    const mine = id => s.items.dealer.includes(id);
-    if (k === undefined && !mine('magnifier') && at('magnifier') >= 0) return at('magnifier');
-    if (k === true && !s.sawed && !mine('saw') && at('saw') >= 0) return at('saw');
-    if (k === true && s.cuffs.player === 0 && s.shells.length > 1 && !mine('handcuffs') && at('handcuffs') >= 0) return at('handcuffs');
-    if (!s.wiresCut && s.hp.dealer < s.max && !mine('cigarettes') && at('cigarettes') >= 0) return at('cigarettes');
+  // 打法參數：
+  //   cigBelow 缺幾點才抽菸、medGap 缺幾點才吃藥、medMinHp 血至少多少才吃、medChance 吃的機率
+  //   info 用放大鏡（手機 ×0.6）的機率、beer 不確定時喝啤酒的機率（機率在 beerLo～beerHi 之間才喝）
+  //   invert 知道是空包時用反轉器的機率、invertUnknown 不確定但多半是空包時也反轉（再乘上 invert）
+  //   shootOpp 機率多少以上就開對手、cuffs／saw 用手銬、鋸子的機率（cuffsP、sawP 是不確定時的門檻）、sawLive 知道是實彈時鋸
+  //   coin 剛好一半時擲硬幣、wild 不照機率亂開、chaos 隨便用道具
+  TRAITS: {
+    calc: { cigBelow: 1, medGap: 2, medMinHp: 2, medChance: 1, info: 1, beer: 1, beerLo: 0.3, beerHi: 0.7, invert: 1, invertUnknown: 1, shootOpp: 0.5, cuffs: 1, cuffsP: 0.5, saw: 1, sawP: 0.6, sawLive: 1, coin: false, wild: 0, chaos: 0 },
+    brute: { cigBelow: 0, medGap: 3, medMinHp: 2, medChance: 0.5, info: 0.7, beer: 0.2, beerLo: 0.3, beerHi: 0.6, invert: 1, invertUnknown: 0.5, shootOpp: 0.4, cuffs: 1, cuffsP: 0.4, saw: 1, sawP: 0.4, sawLive: 1, coin: false, wild: 0, chaos: 0 },
+    careful: { cigBelow: 1, medGap: 1, medMinHp: 2, medChance: 1, info: 1, beer: 1, beerLo: 0.2, beerHi: 0.8, invert: 1, invertUnknown: 0.6, shootOpp: 0.35, cuffs: 1, cuffsP: 0.6, saw: 0.6, sawP: 0.75, sawLive: 1, coin: false, wild: 0, chaos: 0 },
+    gambler: { cigBelow: 1, medGap: 1, medMinHp: 1, medChance: 1, info: 0.85, beer: 0.6, beerLo: 0.25, beerHi: 0.75, invert: 0.9, invertUnknown: 0.8, shootOpp: 0.5, cuffs: 0.9, cuffsP: 0.5, saw: 0.9, sawP: 0.5, sawLive: 1, coin: true, wild: 0.1, chaos: 0.06 },
+  },
+
+  // 每一方自己的記憶（記在 s 上，換一次裝填就清掉）：反轉過一發不知道的子彈後，這發是實彈的機率
+  memory(s, side) {
+    const all = s._ai || (s._ai = {});
+    let m = all[side];
+    if (!m || m.load !== s.known) m = all[side] = { load: s.known, flipped: null };
+    return m;
+  },
+
+  stealable(s, side, id) {
+    const opp = side === 'player' ? 'dealer' : 'player';
+    if (id === 'saw' && s.sawed) return false;
+    if (id === 'handcuffs' && s.cuffs[opp] !== 0) return false;
+    return true;
+  },
+
+  // 決定要用腎上腺素偷對手的哪一格道具，沒有好目標時回傳 null
+  pickSteal(s, k, { side = 'dealer', persona = 'calc' } = {}) {
+    const opp = side === 'player' ? 'dealer' : 'player';
+    const pl = s.items[opp];
+    const at = id => (this.stealable(s, side, id) ? pl.indexOf(id) : -1);
+    const mine = id => s.items[side].includes(id);
+    const hurt = !s.wiresCut && s.hp[side] < s.max;
+    if (persona === 'gambler') {
+      const ok = pl.map((x, i) => (x && x !== 'adrenaline' && this.stealable(s, side, x) ? i : -1)).filter(i => i >= 0);
+      return ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
+    }
+    const order = [];
+    if (persona === 'careful' && hurt) order.push('cigarettes', 'medicine');
+    if (k === undefined) order.push('magnifier');
+    if (k === true) order.push(persona === 'brute' ? 'saw' : 'handcuffs', persona === 'brute' ? 'handcuffs' : 'saw');
+    if (k === false) order.push('inverter');
+    if (persona === 'brute' && k !== false) order.push('saw', 'handcuffs');
+    if (hurt) order.push('cigarettes');
+    if (k === undefined) order.push('beer');
+    for (const id of order) {
+      if (mine(id) && id !== 'cigarettes') continue;
+      if (id === 'handcuffs' && s.shells.length < 2) continue;
+      const i = at(id);
+      if (i >= 0) return i;
+    }
     return null;
+  },
+};
+
+</script>
+<script>
+// 單人時坐在你對面的角色會講的話（雙人時對手是真人，不講話）。
+// LINES[角色][情境] = [句子…]；ui.js 的 speak(情境) 挑一句（不連續重複、整場盡量不重複），顯示在對話框上方，下巴跟著字動。
+// 情境：
+//   intro 第一局開頭、round 第二三局開頭、think 輪到他、wait 輪到你（偶爾催你）
+//   aimYou／aimSelf 他舉槍對你／對自己、hitYou 他打中你、missYou 他打你是空包、safeSelf 他打自己是空包、hurtSelf 他打自己中彈
+//   youMiss 你打他是空包、youHit 你打中他、youSafe 你打自己是空包、youHurt 你打自己中彈
+//   heal 他補血、medBad 他吃藥失敗、saw 他鋸槍、cuff 他銬你、peek 他用放大鏡、beer 他喝啤酒、phone 他打電話、invert 他用反轉器、steal 他偷你的道具
+//   youCuff 你銬他、youSaw 你鋸槍、youSteal 你偷他的、low 他只剩 1 點、youLow 你只剩 1 點、wires 斷電、back 他倒下又坐回來
+//   lose 你輸了（整場，你贏的時候他已經倒下了）
+const LINES = {
+  // 莊家：冷靜、有禮貌、像在算帳
+  dealer: {
+    intro: ['規則很簡單。活下來的人拿錢。', '請坐。我們慢慢來。'],
+    round: ['下一局。賭注加倍。', '你還在。很好。'],
+    think: ['讓我算一算。', '嗯……'],
+    wait: ['不急。槍不會跑。', '你在算機率嗎？'],
+    aimYou: ['數學站在我這邊。', '別動。'],
+    aimSelf: ['我相信機率。'],
+    hitYou: ['帳記上了。', '一發。'],
+    missYou: ['可惜。'],
+    safeSelf: ['如我所料。'],
+    hurtSelf: ['……算錯了一次。'],
+    youMiss: ['再算算看。', '真有意思。'],
+    youHit: ['……不錯。', '你學得很快。'],
+    youSafe: ['膽子不小。'],
+    youHurt: ['這種事會發生的。'],
+    heal: ['休息一下。'],
+    medBad: ['……過期了。'],
+    saw: ['兩倍的代價。'],
+    cuff: ['這一回合，你只能看。'],
+    peek: ['真有意思。'],
+    beer: ['換一發。'],
+    phone: ['嗯，我知道了。'],
+    invert: ['翻過來看看。'],
+    steal: ['借我一下。'],
+    youCuff: ['你在拖時間。'],
+    youSaw: ['你確定嗎？'],
+    youSteal: ['那是我的。'],
+    low: ['……有意思了。'],
+    youLow: ['剩一點了。想清楚。'],
+    wires: ['沒有第二次機會了。'],
+    back: ['我們繼續。'],
+    lose: ['結帳。'],
+  },
+  // 寡婦：憂鬱、低聲，老是想起死去的丈夫
+  widow: {
+    intro: ['你的眼睛……很像他。', '坐吧。我等很久了。'],
+    round: ['又一局。我還沒哭完呢。', '黑色很適合你。'],
+    think: ['讓我想一想……', '他會怎麼做呢……'],
+    wait: ['慢慢來。我習慣等待。', '你在發抖。'],
+    aimYou: ['別怕。很快的。', '閉上眼睛。'],
+    aimSelf: ['如果我走了……也好。'],
+    hitYou: ['對不起……', '你流血的樣子，也很像他。'],
+    missYou: ['老天還不想帶你走。'],
+    safeSelf: ['……還不是今天。'],
+    hurtSelf: ['啊……好冷。'],
+    youMiss: ['你也捨不得嗎？', '傻孩子。'],
+    youHit: ['……好痛。', '你跟他一樣狠心。'],
+    youSafe: ['你真勇敢。'],
+    youHurt: ['不要逞強。'],
+    heal: ['我得撐下去。', '再一下下就好。'],
+    medBad: ['連藥都背叛我……'],
+    saw: ['這樣比較快結束。'],
+    cuff: ['陪我坐一會兒。'],
+    peek: ['……嗯。'],
+    beer: ['敬他。'],
+    phone: ['是你嗎……親愛的？'],
+    invert: ['命運也可以翻面。'],
+    steal: ['這個我先收著。'],
+    youCuff: ['你也想把我留下嗎？'],
+    youSaw: ['你好殘忍。'],
+    youSteal: ['……那是他送我的。'],
+    low: ['我快要見到他了。'],
+    youLow: ['別死在我面前。'],
+    wires: ['沒有人會救我們了。'],
+    back: ['……我又回來了。'],
+    lose: ['留下來陪我吧。'],
+  },
+  // 屠夫：粗魯、兇，滿嘴肉和刀
+  butcher: {
+    intro: ['新鮮的肉。', '坐好，別亂動。'],
+    round: ['熱身結束。', '刀磨好了。'],
+    think: ['哼。', '看我的。'],
+    wait: ['快點！', '你在等什麼，等死嗎？'],
+    aimYou: ['看這裡！', '吃我一發！'],
+    aimSelf: ['老子不怕。'],
+    hitYou: ['哈！剁開了！', '這才叫肉！'],
+    missYou: ['嘖！'],
+    safeSelf: ['哈！命硬！'],
+    hurtSelf: ['他媽的！'],
+    youMiss: ['就這樣？', '軟腳蝦。'],
+    youHit: ['你找死！', '呃啊……！'],
+    youSafe: ['有種。'],
+    youHurt: ['哈哈哈！蠢貨！'],
+    heal: ['抽一根再說。'],
+    medBad: ['這什麼鬼藥！'],
+    saw: ['來，鋸短一點！', '這樣才夠痛！'],
+    cuff: ['乖乖坐好。'],
+    peek: ['哼哼。'],
+    beer: ['乾！'],
+    phone: ['講快點！'],
+    invert: ['翻面！'],
+    steal: ['你的？現在是我的了。'],
+    youCuff: ['解開！'],
+    youSaw: ['你敢！'],
+    youSteal: ['小偷！'],
+    low: ['……我還站得起來。'],
+    youLow: ['最後一塊肉。'],
+    wires: ['好！沒人能逃了！'],
+    back: ['再來！'],
+    lose: ['上砧板。'],
+  },
+  // 瘋婆：咯咯笑、胡言亂語、愛賭藥
+  crone: {
+    intro: ['嘻嘻……來玩呀。', '奶奶給你糖吃。'],
+    round: ['再一圈！再一圈！', '嘻嘻，還沒死呀？'],
+    think: ['點點名……', '左邊？右邊？嘻嘻。'],
+    wait: ['快呀快呀！', '奶奶等不及啦。'],
+    aimYou: ['砰——！嘻嘻。', '看這邊，小乖乖。'],
+    aimSelf: ['奶奶也想玩！'],
+    hitYou: ['嘻嘻嘻嘻！', '紅色的！好漂亮！'],
+    missYou: ['哎呀，沒有。'],
+    safeSelf: ['奶奶好幸運！'],
+    hurtSelf: ['唉喲喲喲……'],
+    youMiss: ['咔！咔！嘻嘻。', '騙到你了吧？'],
+    youHit: ['痛死奶奶了！', '壞孩子！'],
+    youSafe: ['好玩吧？'],
+    youHurt: ['嘻嘻，自己打自己。'],
+    heal: ['抽口菸，長生不老。'],
+    medBad: ['苦的！嘻嘻……苦的！', '再一顆就好了……'],
+    saw: ['鋸呀鋸，鋸木頭。'],
+    cuff: ['綁起來！綁起來！'],
+    peek: ['嘻嘻。', '奶奶看到囉。'],
+    beer: ['咕嚕咕嚕。'],
+    phone: ['喂？喂？是誰呀？'],
+    invert: ['顛倒！顛倒！'],
+    steal: ['奶奶的了。'],
+    youCuff: ['奶奶的手好痠。'],
+    youSaw: ['好兇喔。'],
+    youSteal: ['還給奶奶！'],
+    low: ['奶奶要睡了……'],
+    youLow: ['快睡了吧，乖。'],
+    wires: ['燈熄了，說故事時間。'],
+    back: ['奶奶回來囉！'],
+    lose: ['乖，睡吧。'],
   },
 };
 
@@ -3601,6 +3863,10 @@ const WK = (() => {
   // eyes：眼白的顏色（dark 原作的黑眼睛、blood 充血、yellow 泛黃、milky 白濁）；glow：瞳孔的光
   // paint：base 膚底色、lip 嘴唇、blood 嘴角流血、tears 黑色淚痕、liner 眼線、wrinkle 皺紋強度、stubble 鬍渣
   // body：w 寬、d 厚、belly 肚子、chest 胸、shoulder 肩寬、arm 手臂粗細；outfit：服裝（body.js 的 OUTFITS：suit、mourning、apron、shawl）
+  // persona：個性（scene.js 讀）——face 平常的表情（加在其他表情上）、bend 上半身往前彎（負的往後挺）、chin 下巴抬起、
+  //          rest 休息時兩手放哪（莊家的座標，沒給就用預設）、elbows 手肘壓在桌上（手臂反向運動學的手肘方向 [x, y, z]）、fidget 待機小動作（tap 敲桌、veil 拉面紗、knuckles 折手指、sway 晃頭）、
+  //          tell 用放大鏡看到子彈時藏不住的表情：live／blank = [秒, smile, jaw, squint, brow]，blankP 看到空包也這樣（假的）的機率
+  //          veil 戴面紗（head.js）
   const CHARS = {
     dealer: {
       tint: 0xffffff, rough: 0.5, hair: 'none', eyes: 'dark', glow: 0xfff4d0, outfit: 'suit',
@@ -3615,6 +3881,7 @@ const WK = (() => {
       paint: { base: [178, 168, 146], lip: [110, 45, 40], blood: true, tears: false, wrinkle: 1, stubble: 0 },
       teeth: { missing: [-4, 2, 5], color: 0xd8cca2 },
       body: { w: 1, d: 1, belly: 0, chest: 0, shoulder: 1, arm: 1 },
+      persona: { face: { smile: 0.15 }, bend: 0, chin: 0, fidget: 'tap', tell: { live: [1.4, 0.5, 0.02, 0.35, 0] } },
     },
     widow: {
       tint: 0xe4eaf4, rough: 0.42, hair: 'long', hairColor: 0x5a3028, eyes: 'blood', glow: 0xfff0e0, outfit: 'mourning',
@@ -3631,6 +3898,7 @@ const WK = (() => {
       paint: { base: [200, 190, 184], lip: [118, 18, 34], blood: false, tears: true, liner: true, wrinkle: 0.35, stubble: 0 },
       teeth: { missing: [], color: 0xe4dece },
       body: { w: 0.85, d: 0.92, belly: 0, chest: 0.045, shoulder: 0.9, arm: 0.86 },
+      persona: { face: { smile: -0.35, brow: 0.25 }, bend: -0.07, chin: 0.07, fidget: 'veil', veil: true, tell: { live: [0.9, 0.55, 0, 0.1, 0] } },
     },
     butcher: {
       tint: 0xf4d8c8, rough: 0.58, hair: 'buzz', hairColor: 0x4a3c32, eyes: 'yellow', glow: 0xffe8c8, outfit: 'apron',
@@ -3647,6 +3915,7 @@ const WK = (() => {
       paint: { base: [188, 150, 128], lip: [122, 52, 46], blood: true, tears: false, wrinkle: 0.7, stubble: 1 },
       teeth: { missing: [-5, -1, 3, 6], color: 0xc8b886 },
       body: { w: 1.32, d: 1.38, belly: 0.13, chest: 0, shoulder: 1.22, arm: 1.28 },
+      persona: { face: { smile: -0.3, brow: 0.45 }, bend: 0.22, chin: 0, elbows: [0.45, -0.15, -0.12], rest: [[-0.11, 0, 0.6], [0.11, 0, 0.6]], fidget: 'knuckles', tell: { live: [2.2, 1, 0.08, 0.45, -0.3], blank: [1.2, -0.5, 0, 0, 0.6] } },
     },
     crone: {
       tint: 0xfff0cc, rough: 0.62, hair: 'bun', hairColor: 0xf2eee6, eyes: 'milky', glow: 0xf4fff0, outfit: 'shawl',
@@ -3663,6 +3932,7 @@ const WK = (() => {
       paint: { base: [178, 168, 152], lip: [98, 38, 52], blood: false, tears: false, wrinkle: 1.7, stubble: 0 },
       teeth: { missing: [-3, -2, 1, 4, 5], color: 0xb4a474 },
       body: { w: 0.9, d: 0.98, belly: 0.03, chest: 0.03, shoulder: 0.94, arm: 0.9 },
+      persona: { face: { smile: 0.25 }, bend: 0.2, chin: 0.1, fidget: 'sway', tell: { live: [2.4, 0.85, 0.08, 0.3, 0], blank: [1.3, 0.85, 0.08, 0.3, 0], blankP: 0.5 } },
     },
   };
 
@@ -3685,7 +3955,7 @@ const WK = (() => {
 // 綁上骨頭做蒙皮（脖子、頭、下巴、上下眼皮、嘴角、眉毛），眼球與牙齒是另外的網格。
 // 座標：頭的轉軸（scene.js 的 D.head，脖子頂端）為原點，單位公尺；+z 朝前（玩家那邊）、+y 朝上、+x 是莊家的左邊
 (() => {
-  const { T, V, PI, R, std, mesh, tex, env } = WK;
+  const { T, V, PI, R, sstep, std, mesh, tex, env } = WK;
   const { smooth, smin, smax, clamp01, ell, ellip, seg, tube, carve, bounded, tick } = SDF;
 
   // ---------- 角色的頭型參數 → 實際尺寸 ----------
@@ -4568,7 +4838,164 @@ normal = headPerturb(-vViewPosition, normal, dH * uBump * 4.0, faceDirection);`)
     };
     inst.pose({});
     fitHair(inst);
+    if (spec.persona && spec.persona.veil) buildVeil(inst);
     return inst;
+  }
+
+  // ---------- 寡婦的蕾絲面紗：從額頭上一圈細髮箍垂下來，蓋到鼻尖（嘴露出來） ----------
+  // 一行行從髮箍往下長（像髮片，碰到頭、鼻子、眉骨就往外推），每一行重新取樣成同樣的點數，連成一片；
+  // 貼圖是程序畫的網眼＋小花＋下緣的扇形花邊（alphaTest），掛在頭的骨頭上。inst.veilEdge：右側下緣捏面紗的點；inst.veilPull(k)：往下拉
+  let laceTex = null;
+  function laceTexture() {
+    if (laceTex) return laceTex;
+    const W = 256, c = document.createElement('canvas');
+    c.width = W; c.height = W;
+    const g = c.getContext('2d');
+    g.strokeStyle = '#fff'; g.fillStyle = '#fff';
+    // 菱形網眼
+    g.lineWidth = 1.6;
+    const n = 8, d = W / n;
+    for (let i = -n; i <= 2 * n; i++) {
+      g.beginPath(); g.moveTo(i * d, 0); g.lineTo(i * d + W, W); g.stroke();
+      g.beginPath(); g.moveTo(i * d, 0); g.lineTo(i * d - W, W); g.stroke();
+    }
+    // 網眼交叉處的小點、幾朵小花
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { g.beginPath(); g.arc(i * d, j * d, 2.4, 0, PI * 2); g.fill(); }
+    for (const [x, y] of [[0.25, 0.25], [0.75, 0.75]]) {
+      for (let k = 0; k < 6; k++) { const a = k * PI / 3; g.beginPath(); g.ellipse(x * W + Math.cos(a) * 9, y * W + Math.sin(a) * 9, 7, 3.6, a, 0, PI * 2); g.fill(); }
+      g.beginPath(); g.arc(x * W, y * W, 4, 0, PI * 2); g.fill();
+    }
+    laceTex = new T.CanvasTexture(c);
+    laceTex.wrapS = laceTex.wrapT = T.RepeatWrapping;
+    laceTex.anisotropy = 8;
+    return laceTex;
+  }
+  let scallopTex = null;
+  // 下緣的扇形花邊：v 從 1（上）到 0（下緣），最下面一段挖出半圓
+  function scallopTexture() {
+    if (scallopTex) return scallopTex;
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const g = c.getContext('2d');
+    // 上面一條細邊，下面垂著一個個半圓（中間挖一個小洞）
+    g.fillStyle = '#fff'; g.fillRect(0, 0, 64, 18);
+    g.beginPath(); g.arc(32, 16, 26, 0, PI); g.fill();
+    g.fillStyle = '#000'; g.beginPath(); g.arc(32, 22, 9, 0, PI * 2); g.fill();
+    g.fillRect(0, 9, 64, 3);
+    scallopTex = new T.CanvasTexture(c);
+    scallopTex.wrapS = T.RepeatWrapping;
+    return scallopTex;
+  }
+  function buildVeil(inst) {
+    const { H, S } = inst.built;
+    const parent = inst.bones[B.head];
+    const field = (x, y, z) => S.sdf(x, y, z);
+    const grad = (p, e = 0.002) => V(field(p.x + e, p.y, p.z) - field(p.x - e, p.y, p.z), field(p.x, p.y + e, p.z) - field(p.x, p.y - e, p.z), field(p.x, p.y, p.z + e) - field(p.x, p.y, p.z - e)).normalize();
+    const push = (p, off) => { for (let it = 0; it < 6; it++) { const need = off - field(p.x, p.y, p.z); if (need <= 0) break; p.addScaledVector(grad(p), need + 0.0004); } return p; };
+    const yTop = H.brow.y + 0.05, yEdge = H.nose.tipY - 0.004, cz = H.skull.z;
+    // 兩側到顴骨後面為止（不蓋到耳朵：手機貼耳時手才不會在面紗後面）；下緣兩側往上彎，讓出臉頰給拿東西到嘴邊的手
+    const COLS = 51, ROWS = 18, A = 1.15;
+    const edgeY = a => yEdge + 0.022 * (a / A) ** 2;
+    const grid = [];
+    for (let ci = 0; ci < COLS; ci++) {
+      const a = -A + (2 * A * ci) / (COLS - 1), dir = V(Math.sin(a), 0, Math.cos(a));
+      // 髮箍上的點：在 yTop 這個高度沿方向找頭的表面，往外推 2 公分（瀏海在額頭前面 1 公分多）
+      let lo = 0, hi = 0.3;
+      for (let k = 0; k < 24; k++) { const t = (lo + hi) / 2; if (field(dir.x * t, yTop, cz + dir.z * t) < 0) lo = t; else hi = t; }
+      const p = push(V(dir.x * hi, yTop, cz + dir.z * hi), 0.02);
+      const pts = [p.clone()];
+      let d = V(0, -1, 0.25).normalize();
+      const yE = edgeY(a);
+      for (let k = 0; k < 80 && p.y > yE; k++) {
+        // 往下垂，越往下越貼近臉（離皮膚 2 公分 → 1.2 公分）
+        const off = 0.012 + 0.008 * sstep(yE, yTop, p.y);
+        p.addScaledVector(d, 0.006);
+        push(p, off);
+        const back = field(p.x, p.y, p.z) - off;
+        if (back > 0.002) p.addScaledVector(grad(p), -Math.min(back, 0.003));
+        d = d.multiplyScalar(0.7).add(V(0, -0.3, 0)).normalize();
+        pts.push(p.clone());
+      }
+      // 最後一點切在 yEdge（下緣是平的）
+      const L = pts.length;
+      if (L > 1 && pts[L - 1].y < yE) { const q = pts[L - 2], r = pts[L - 1], t = (q.y - yE) / (q.y - r.y); pts[L - 1] = q.clone().lerp(r, t); }
+      // 依弧長重新取樣成 ROWS 點
+      const acc = [0];
+      for (let k = 1; k < pts.length; k++) acc.push(acc[k - 1] + pts[k].distanceTo(pts[k - 1]));
+      const col = [];
+      for (let r = 0; r < ROWS; r++) {
+        const s = acc[acc.length - 1] * r / (ROWS - 1);
+        let k = 1;
+        while (k < acc.length - 1 && acc[k] < s) k++;
+        const t = acc[k] > acc[k - 1] ? (s - acc[k - 1]) / (acc[k] - acc[k - 1]) : 0;
+        col.push(pts[k - 1].clone().lerp(pts[k], Math.min(1, Math.max(0, t))));
+      }
+      grid.push(col);
+    }
+    const pos = [], uv = [], uv2 = [], idx = [];
+    for (let ci = 0; ci < COLS; ci++) for (let r = 0; r < ROWS; r++) {
+      const q = grid[ci][r];
+      pos.push(q.x, q.y, q.z);
+      uv.push(ci / (COLS - 1) * 5, (1 - r / (ROWS - 1)) * 1.6);
+      uv2.push(ci / (COLS - 1) * 14, 1 - r / (ROWS - 1));
+    }
+    for (let ci = 0; ci < COLS - 1; ci++) for (let r = 0; r < ROWS - 1; r++) {
+      const a = ci * ROWS + r, b = a + ROWS;
+      idx.push(a, a + 1, b, b, a + 1, b + 1);
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+    geo.setAttribute('veilUv', new T.Float32BufferAttribute(uv2, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    // 網眼 × 下緣花邊（只有最下面一段用花邊的圖）
+    const mat = new T.MeshStandardMaterial({ color: 0x0b0a0d, roughness: 0.55, metalness: 0, alphaMap: laceTexture(), alphaTest: 0.5, side: T.DoubleSide, envMap: env.tex, envMapIntensity: 0.3 });
+    mat.onBeforeCompile = sh => {
+      sh.uniforms.scallop = { value: scallopTexture() };
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <uv_pars_vertex>', '#include <uv_pars_vertex>\nattribute vec2 veilUv; varying vec2 vVeil;')
+        .replace('#include <uv_vertex>', '#include <uv_vertex>\nvVeil = veilUv;');
+      // 下緣 7% 是扇形花邊，上面是網眼
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <alphamap_pars_fragment>', '#include <alphamap_pars_fragment>\nuniform sampler2D scallop; varying vec2 vVeil;')
+        .replace('#include <alphamap_fragment>', 'diffuseColor.a *= vVeil.y < 0.07 ? texture2D( scallop, vec2( vVeil.x, vVeil.y / 0.07 ) ).g : texture2D( alphaMap, vUv ).g;');
+    };
+    const veil = new T.Mesh(geo, mat);
+    veil.receiveShadow = true;
+    parent.add(veil);
+    // 髮箍：沿面紗上緣再繞到頭後面一圈的細管
+    const ring = [];
+    for (let k = 0; k < 48; k++) {
+      const a = (k / 48) * PI * 2 - PI, dir = V(Math.sin(a), 0, Math.cos(a));
+      let lo = 0, hi = 0.3;
+      for (let j = 0; j < 24; j++) { const t = (lo + hi) / 2; if (field(dir.x * t, yTop, cz + dir.z * t) < 0) lo = t; else hi = t; }
+      ring.push(push(V(dir.x * hi, yTop, cz + dir.z * hi), Math.abs(a) < A ? 0.02 : 0.016));
+    }
+    const band = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(ring, true), 96, 0.0035, 6, true), std(0x111014, { roughness: 0.35, envMap: env.tex, envMapIntensity: 0.6 }));
+    band.castShadow = true;
+    parent.add(band);
+    // 捏面紗的點：右側（+x）下緣，往外的方向
+    const ce = Math.round((COLS - 1) * 0.8), ep = grid[ce][ROWS - 1].clone(), en = V(ep.x, 0, ep.z - cz).normalize();
+    // 捏的點在面紗外側 8 公釐（手指在面紗前面，不穿到臉與面紗之間）
+    inst.veilEdge = { p: ep.clone().addScaledVector(en, 0.008), n: en };
+    // pull：捏的點附近的下面幾行往下拉；lift：東西拿到嘴邊時下緣往外往上掀（手在面紗底下，面紗不會切過手）
+    const base = Float32Array.from(pos), pa = geo.attributes.position;
+    let lastP = 0, lastL = 0;
+    inst.veilPose = (pull, lift) => {
+      if (Math.abs(pull - lastP) < 0.002 && Math.abs(lift - lastL) < 0.002) return;
+      lastP = pull; lastL = lift;
+      for (let ci = 0; ci < COLS; ci++) for (let r = 0; r < ROWS; r++) {
+        const i = ci * ROWS + r, v = r / (ROWS - 1), w = Math.exp(-(((ci - ce) / 6) ** 2)) * v * v;
+        const nx = base[i * 3], nz = base[i * 3 + 2] - cz, nl = Math.hypot(nx, nz) || 1, out = 0.05 * lift * Math.pow(v, 1.6);
+        pa.array[i * 3] = base[i * 3] + nx / nl * out;
+        pa.array[i * 3 + 1] = base[i * 3 + 1] - 0.012 * pull * w + 0.025 * lift * v * v;
+        pa.array[i * 3 + 2] = base[i * 3 + 2] + 0.004 * pull * w + nz / nl * out;
+      }
+      pa.needsUpdate = true;
+    };
+    inst.veil = veil;
+    inst.veilGrid = { cols: COLS, rows: ROWS };
   }
 
   // ---------- 頭髮的底層：貼著頭皮的殼 ----------
@@ -5619,6 +6046,11 @@ const World = (() => {
     if (WK.Body.cache[charId]) { if (D.bodyInst?.built !== WK.Body.cache[charId]) attachBody(WK.Body.cache[charId]); }
     else WK.Body.get(charId, spec).then(built => { if (my === headToken) attachBody(built); });
     D.shoulder[0].x = -0.24 * b.shoulder; D.shoulder[1].x = 0.24 * b.shoulder;
+    // 個性：平常的表情、姿勢、休息時兩手的位置、待機小動作
+    D.persona = spec.persona || {};
+    const rp = D.persona.rest || [[-0.27, 0, 0.42], [0.27, 0, 0.42]];
+    D.rest[0].set(...rp[0]); D.rest[1].set(...rp[1]);
+    D.fidget.kind = null; D.fidget.next = R(4, 8);
     for (const arm of D.arms) {
       arm.up.scale.x = arm.up.scale.z = b.arm;
       arm.fore.scale.x = arm.fore.scale.z = b.arm;
@@ -5656,8 +6088,8 @@ const World = (() => {
     return h;
   }
 
-  // c：握緊程度 0~1；seed：讓兩隻手的閒置動作錯開
-  function setCurl(h, c, seed = 0) {
+  // c：握緊程度 0~1；seed：讓兩隻手的閒置動作錯開；fx：每根手指（食指到小指）額外的彎曲（負的往上翹），小動作用
+  function setCurl(h, c, seed = 0, fx = null) {
     const idle = 1 - Math.min(1, c * 2);
     h.userData.fingers.forEach((js, i) => {
       // 閒置時手指從小指到食指緩慢地一根根蜷起又張開，帶一點顫抖
@@ -5665,7 +6097,7 @@ const World = (() => {
       const tremor = Math.sin(time * 23 + i * 5 + seed * 7) * 0.012;
       js.forEach((j, k) => {
         const curlK = [0.04 + c * (1.5 + i * 0.06), 0.24 + c * 1.4, 0.18 + c * 1.0][k];
-        j.rotation.x = curlK + wave * [1, 0.7, 0.4][k] + (k === 0 ? tremor : 0);
+        j.rotation.x = curlK + wave * [1, 0.7, 0.4][k] + (k === 0 ? tremor : 0) + (fx ? fx[i] * [1, 0.6, 0.35][k] : 0);
         j.rotation.z = j.userData.kink;
       });
       js[0].rotation.y = js[0].userData.splay * (1 - c * 0.7);
@@ -5755,6 +6187,13 @@ const World = (() => {
     D.blink = { next: 2, t: -1, again: false };
     D.face = { jaw: 0, smile: 0, brow: 0, wide: 0, squint: 0 };
     D.eyeLook = [0, 0];
+    // 階段 4：視線（頭轉向看的點）、心情、事件表情、講話的下巴、待機小動作
+    D.lookYP = [0, 0]; D.lookW = 0; D.faceNear = 0; D.watch = null; D.veilLift = 0; D.calm = 0; D.restNow = [V(), V()];
+    D.mood = { self: 1, opp: 1 }; D.moodS = { self: 1, opp: 1 }; D.breathPh = 0;
+    D.feels = [];
+    D.talk = { t: 0, dur: 0, amp: 0 };
+    D.fidget = { next: 6, kind: null, t: 0, dur: 0, k: 0, pull: 0 };
+    D.persona = {};
     scene.add(g);
     setCharacter('dealer');
   }
@@ -5859,21 +6298,186 @@ const World = (() => {
     if (!inst) return;
     // 眼睛看向鏡頭（左右、上下各有上限，慢慢跟過去）
     D.head.updateMatrixWorld();
-    D.head.worldToLocal(lookV.copy(camera.position)).sub(inst.eyes[0].position.clone().add(inst.eyes[1].position).multiplyScalar(0.5));
+    D.head.worldToLocal(lookV.copy(lookPt)).sub(inst.eyes[0].position.clone().add(inst.eyes[1].position).multiplyScalar(0.5));
     const yaw = Math.max(-0.35, Math.min(0.35, Math.atan2(lookV.x, lookV.z))), pitch = Math.max(-0.25, Math.min(0.2, -Math.atan2(lookV.y, Math.hypot(lookV.x, lookV.z))));
     const a = 1 - Math.exp(-8 * dt);
     D.eyeLook[0] += (yaw - D.eyeLook[0]) * a; D.eyeLook[1] += (pitch - D.eyeLook[1]) * a;
-    const f = D.face;
+    const f = faceTotal(dt);
     inst.pose({ jaw: f.jaw, smile: f.smile, brow: f.brow, wide: f.wide, squint: f.squint, lids: [k, k], look: D.eyeLook });
+    // 寡婦：東西拿到臉前面時把面紗下緣掀起來
+    if (inst.veilPose) {
+      D.veilLift += (D.faceNear - D.veilLift) * (1 - Math.exp(-(D.faceNear > D.veilLift ? 9 : 3) * dt));
+      inst.veilPose(D.fidget.kind === 'veil' ? D.fidget.pull : 0, Math.min(1, D.veilLift * 1.6));
+    }
+  }
+
+  // ---------- 階段 4：表情分層、視線、講話、待機小動作 ----------
+  // 最後的表情 = 個性的底色 + 心情（血少喘、你血少笑） + 事件（幾秒內淡掉） + 反應動作（D.face） + 講話的下巴
+  const FACE_KEYS = ['jaw', 'smile', 'brow', 'wide', 'squint'];
+  const faceOut = { jaw: 0, smile: 0, brow: 0, wide: 0, squint: 0 };
+  // 事件表情：[秒, (k 包絡 0→1→0, t 秒) → 表情]；tellLive／tellBlank 依角色（persona.tell）
+  const FEEL = {
+    gloat: [2.2, (k, t) => ({ smile: 0.85 * k, squint: 0.45 * k, jaw: 0.05 * k + 0.04 * k * Math.max(0, Math.sin(t * 22)) })],
+    amused: [1.8, k => ({ smile: 0.6 * k, squint: 0.3 * k })],
+    pain: [2.6, k => ({ brow: 1 * k, squint: 0.7 * k, smile: -0.7 * k, jaw: 0.03 * k })],
+    relief: [1.3, k => ({ squint: 0.35 * k, smile: 0.25 * k })],
+    eager: [1.6, k => ({ wide: 0.45 * k, smile: 0.55 * k })],
+    shock: [1.8, k => ({ wide: 1 * k, brow: -0.6 * k, jaw: 0.1 * k })],
+  };
+  function feel(kind) {
+    let spec = FEEL[kind];
+    if (kind === 'tellLive' || kind === 'tellBlank') {
+      const tell = D.persona.tell || {};
+      let v = kind === 'tellLive' ? tell.live : tell.blank;
+      // 瘋婆看到空包也可能笑（假的），實彈時笑得比較久
+      if (kind === 'tellBlank' && tell.blankP !== undefined && Math.random() >= tell.blankP) v = null;
+      if (!v) return;
+      const [dur, smile, jaw, squint, brow] = v;
+      spec = [dur, (k, t) => ({ smile: smile * k, jaw: jaw * k + (smile > 0.7 ? 0.03 * k * Math.max(0, Math.sin(t * 20)) : 0), squint: squint * k, brow: brow * k })];
+    }
+    if (!spec) return;
+    D.feels.push({ fn: spec[1], dur: spec[0], t: 0 });
+  }
+  function faceTotal(dt) {
+    for (const k of FACE_KEYS) faceOut[k] = (D.persona.face && D.persona.face[k]) || 0;
+    // 心情：慢慢跟上電量
+    const a = 1 - Math.exp(-1.5 * dt);
+    D.moodS.self += (D.mood.self - D.moodS.self) * a; D.moodS.opp += (D.mood.opp - D.moodS.opp) * a;
+    const low = Math.max(0, 1 - D.moodS.self), oppLow = Math.max(0, 1 - D.moodS.opp);
+    const br = 0.5 + 0.5 * Math.sin(D.breathPh);
+    faceOut.jaw += low * (0.025 + 0.06 * br);
+    faceOut.brow += 0.55 * low;
+    faceOut.squint += 0.2 * low;
+    faceOut.smile += 0.35 * oppLow - 0.2 * low;
+    // 事件表情
+    for (let i = D.feels.length - 1; i >= 0; i--) {
+      const e = D.feels[i];
+      e.t += dt;
+      if (e.t >= e.dur) { D.feels.splice(i, 1); continue; }
+      const k = sstep(0, 0.15, e.t) * (1 - sstep(e.dur * 0.6, e.dur, e.t));
+      const o = e.fn(k, e.t);
+      for (const key in o) faceOut[key] += o[key];
+    }
+    // 反應動作（dealerReact、中彈）
+    for (const k of FACE_KEYS) faceOut[k] += D.face[k];
+    // 講話：每個字下巴開合一次，嘴角跟著動一點
+    const tk = D.talk;
+    if (tk.dur > 0 && tk.t < tk.dur) {
+      tk.t += dt;
+      const o = tk.amp * Math.sin(PI * Math.min(1, tk.t / tk.dur));
+      faceOut.jaw += o; faceOut.smile += o * 0.6;
+    }
+    // 瘋婆晃頭時嘴唇蠕動
+    if (D.fidget.kind === 'sway') faceOut.jaw += 0.035 * D.fidget.k * Math.max(0, Math.sin(D.fidget.t * 9) * Math.sin(D.fidget.t * 2.3));
+    faceOut.jaw = Math.max(-0.02, Math.min(0.32, faceOut.jaw));
+    faceOut.smile = Math.max(-1, Math.min(1.1, faceOut.smile));
+    faceOut.brow = Math.max(-1, Math.min(1.2, faceOut.brow));
+    faceOut.wide = Math.max(0, Math.min(1, faceOut.wide));
+    faceOut.squint = Math.max(0, Math.min(1, faceOut.squint));
+    return faceOut;
+  }
+  // 講話：ui.js 每打出一個字呼叫一次（ms：這個字幾毫秒，真實時間）；null 或標點就閉嘴
+  function dealerTalk(ch, ms = 150) {
+    const tk = D.talk;
+    if (!ch || /[，。！？…、—\s]/.test(ch)) { tk.dur = 0; return; }
+    let h = 0;
+    for (const c of ch) h = (h * 31 + c.charCodeAt(0)) % 997;
+    tk.t = 0; tk.dur = ms / 1000 * speed * 1.1; tk.amp = 0.05 + 0.07 * (h / 997);
+  }
+  // 心情：自己剩多少血（比例）、對手剩多少
+  function dealerMood(selfK, oppK) { D.mood.self = selfK; D.mood.opp = oppK; }
+
+  // 看哪裡：你拿著槍 → 槍口；有人在用道具 → 那個道具；其他 → 鏡頭（你的臉）
+  const lookPt = V(0, 0.8, 1.3), lookGoal = V();
+  function lookTarget() {
+    if (['lifted', 'aimDealer', 'aimSelf'].includes(gunPose) && D.grips[0] + D.grips[1] < 0.05) return muzzleAnchor.getWorldPosition(lookGoal);
+    // 道具在桌面附近才看著它（舉到臉前面時看你，頭才不會低著等東西送到嘴邊）
+    if (D.watch && D.watch.parent && D.watch.getWorldPosition(lookGoal).y < 0.22) return lookGoal;
+    return lookGoal.copy(camera.position);
+  }
+  const lookTmp = V(), pivotTmp = V(), ginv = new T.Matrix4();
+  function updateLook(dt) {
+    lookPt.lerp(lookTarget(), 1 - Math.exp(-7 * dt));
+    // 東西舉到臉前面（手機、喝東西、抽菸、吃藥、扎針）、對自己開槍、急救時頭不轉：錨點與握法都是對著不轉的頭算的
+    const sup = Math.max(D.faceNear, D.selfAimK, D.revive ? 1 : 0);
+    D.lookW += (1 - sup - D.lookW) * (1 - Math.exp(-(sup > 1 - D.lookW ? 12 : 3) * dt));
+    D.group.updateMatrixWorld();
+    ginv.copy(D.group.matrixWorld).invert();
+    lookTmp.copy(lookPt).applyMatrix4(ginv);
+    D.head.getWorldPosition(pivotTmp).applyMatrix4(ginv);
+    lookTmp.sub(pivotTmp);
+    const yaw = Math.max(-0.55, Math.min(0.55, Math.atan2(lookTmp.x, lookTmp.z)));
+    // 頭的轉軸在脖子頂端，眼睛高約 10 公分
+    const pitch = Math.max(-0.25, Math.min(0.32, Math.atan2(-(lookTmp.y - 0.1), Math.hypot(lookTmp.x, lookTmp.z))));
+    // 頭比眼睛慢：眼睛先看過去，頭再跟上
+    const a = 1 - Math.exp(-3.5 * dt);
+    D.lookYP[0] += (yaw - D.lookYP[0]) * a; D.lookYP[1] += (pitch - D.lookYP[1]) * a;
+  }
+
+  const REST0 = [V(-0.27, 0, 0.42), V(0.27, 0, 0.42)];
+  // 待機小動作：沒拿槍、沒用道具、沒被銬、槍放在桌上、沒在做表情時，每 6～14 秒一次；有事要做就馬上收手
+  const FIDGET_DUR = { tap: 2.4, veil: 3.0, knuckles: 3.4, sway: 3.4 };
+  function fidgetIdle() {
+    return !D.fidget.hold && !D.revive && !D.cuffed && D.grips[0] + D.grips[1] < 0.01 && !D.itemHold[0] && !D.itemHold[1] && gunPose === 'rest' && D.lean < 0.05 && D.group.visible && D.group.rotation.x === 0 && !D.feels.length;
+  }
+  function updateFidget(dt) {
+    const f = D.fidget, idle = fidgetIdle();
+    f.k += ((idle && f.kind ? 1 : 0) - f.k) * (1 - Math.exp(-(idle ? 6 : 14) * dt));
+    if (f.kind) {
+      f.t += dt;
+      if (f.t >= f.dur || (!idle && f.k < 0.02)) { f.kind = null; f.k = 0; f.next = R(6, 14); f.pull = 0; }
+      return;
+    }
+    if (!idle || !D.persona.fidget) return;
+    f.next -= dt;
+    if (f.next <= 0) { f.kind = D.persona.fidget; f.t = 0; f.dur = FIDGET_DUR[f.kind] || 2.5; f.cracks = 0; }
+  }
+  // 小動作的包絡：開頭 lead 秒進場、最後 lead 秒收回
+  const fenv = (f, lead = 0.6) => sstep(0, lead, f.t) * (1 - sstep(f.dur - lead, f.dur, f.t)) * f.k;
+  // 小動作的手指：莊家右手四指輪流敲桌；屠夫兩手握拳再把手指一根根往後扳（喀啦）
+  const fxOut = [[0, 0, 0, 0], [0, 0, 0, 0]];
+  function fidgetFingers(i) {
+    const f = D.fidget;
+    if (!f.kind || f.k < 0.01) return null;
+    const o = fxOut[i];
+    o.fill(0);
+    if (f.kind === 'tap' && i === 1) {
+      // 小指 → 食指，一輪 0.5 秒，敲三輪
+      const e = fenv(f, 0.3);
+      for (let n = 0; n < 4; n++) {
+        const ph = ((f.t * 2 - (3 - n) * 0.18) % 1 + 1) % 1;
+        o[n] = -0.55 * e * Math.max(0, Math.sin(Math.min(1, ph / 0.35) * PI));
+      }
+      return o;
+    }
+    if (f.kind === 'knuckles') {
+      // 握拳（0.2～0.7 秒）→ 每根手指往後扳直（右手 1.0 秒起、左手 1.9 秒起，一根 0.18 秒）→ 放開
+      const fist = sstep(0.2, 0.7, f.t) * (1 - sstep(2.8, 3.3, f.t)) * f.k;
+      const t0 = i ? 1.0 : 1.9;
+      for (let n = 0; n < 4; n++) {
+        const a = t0 + n * 0.18, b = sstep(a, a + 0.1, f.t) * (1 - sstep(a + 0.25, a + 0.45, f.t));
+        o[n] = 1.5 * fist - (1.5 * fist + 0.25) * b;
+        if (b > 0.9 && f.cracks <= (i ? n : n + 4) && f.k > 0.5) { f.cracks = (i ? n : n + 4) + 1; SFX.play('crack'); }
+      }
+      return o;
+    }
+    return null;
   }
 
   function updateDealer(dt) {
     const g = D.group;
-    const breathe = Math.sin(time * 1.3);
-    D.torso.scale.y = 1 + breathe * 0.008;
+    // 呼吸：血越少越快、越深
+    const low = Math.max(0, 1 - D.moodS.self);
+    D.breathPh += dt * (1.3 + 1.9 * Math.pow(low, 1.3));
+    const breathe = Math.sin(D.breathPh), deep = 1 + 2.4 * low;
+    D.torso.scale.y = 1 + breathe * 0.008 * deep;
     if (D.bodyInst) D.bodyInst.torso.scale.y = D.torso.scale.y;
-    D.head.rotation.y = Math.sin(time * 0.35) * 0.08 + D.look + D.turn;
-    D.head.rotation.z = Math.sin(time * 0.27) * 0.04 + D.tilt;
+    updateFidget(dt);
+    updateLook(dt);
+    // 東西舉到臉前面時頭不亂晃（待機擺動、晃頭都壓掉）
+    const fd = D.fidget, still = 1 - D.faceNear, sway = fd.kind === 'sway' ? fenv(fd, 0.8) * still : 0;
+    D.head.rotation.y = Math.sin(time * 0.35) * 0.08 * (1 - D.lookW * 0.6) * still + D.look + D.turn + D.lookYP[0] * D.lookW + sway * 0.22 * Math.sin(fd.t * 2.1);
+    D.head.rotation.z = Math.sin(time * 0.27) * 0.04 * still + D.tilt + sway * 0.16 * Math.sin(fd.t * 1.6 + 0.8);
     updateFace(dt);
     g.updateMatrixWorld();
     inv.copy(g.matrixWorld).invert();
@@ -5882,18 +6486,43 @@ const World = (() => {
     D.head.updateMatrixWorld();
     const faceG = D.head.localToWorld(V(0, 0.1, 0.12)).applyMatrix4(inv);
     // 第一步：算出兩隻手這一格要去的位置與朝向
-    const wristT = [], zhs = [], srcs = [], curls = [], poleOff = [], trig = [];
+    const wristT = [], zhs = [], srcs = [], curls = [], poleOff = [], trig = [], fids = [];
     for (let i = 0; i < 2; i++) {
       const side = i ? 1 : -1;
-      const rest = D.cuffed ? V(side * 0.042, 0.04, 0.4) : D.rest[i].clone();
+      // 個性的休息位置（屠夫兩手往前壓在桌上）只在沒事的時候；忙的時候用一般的位置（不然另一隻手搆不到，身體會被拉著往前傾）
+      const rest = D.cuffed ? V(side * 0.042, 0.04, 0.4) : REST0[i].clone().lerp(D.rest[i], D.calm);
+      D.restNow[i].copy(rest);
       rest.y += 0.019 + Math.max(0, Math.sin(time * 0.9 + i * 2)) * 0.003;
+      // 寡婦拉面紗：右手舉到臉旁捏住面紗下緣往下拉一下（捏的點在頭的座標，由面紗提供）
+      let fidgetQ = null, fidgetW = 0, fidgetCurl = 0;
+      if (fd.kind === 'veil' && i === 1 && D.headInst && D.headInst.veilEdge) {
+        fidgetW = fenv(fd, 0.9);
+        const tug = sstep(1.1, 1.5, fd.t) * (1 - sstep(1.9, 2.2, fd.t));
+        fd.pull = tug * fd.k;
+        const e = D.headInst.veilEdge;
+        D.head.updateMatrixWorld();
+        const tipD = D.head.localToWorld(e.p.clone().add(V(0, -0.012 * tug, 0))).applyMatrix4(inv.copy(g.matrixWorld).invert());
+        const outD = D.head.localToWorld(e.p.clone().add(e.n)).applyMatrix4(inv).sub(tipD).normalize();
+        // 手指往上、掌心朝臉（手背朝外）；捏的點在拇指與食指之間（手的座標大約 (0.03, -0.01, 0.085)，右手 x 鏡像）
+        fidgetQ = quatFromBasis(V(0, 1, 0).addScaledVector(outD, -0.3).normalize(), outD);
+        const palm = tipD.clone().sub(V(-0.03, -0.01, 0.085).applyQuaternion(fidgetQ));
+        rest.lerp(palm, fidgetW);
+        // 半路往外繞一點：從桌上舉到臉旁、放回去的路上手不會擦過下巴
+        const bulge = Math.sin(PI * fidgetW);
+        rest.x += side * 0.1 * bulge; rest.z += 0.05 * bulge;
+        fidgetCurl = 0.25 + 0.3 * sstep(0.9, 1.1, fd.t) * (1 - sstep(2.1, 2.4, fd.t));
+      }
       const fwd = D.foreDir[i].clone().setY(0);
       if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, 1);
       fwd.normalize().add(V(0, -0.12, 0)).normalize();
       const restQ = D.cuffed ? quatFromBasis(V(0, -0.2, 1).normalize(), V(side, 0, 0)) : quatFromBasis(fwd, UP);
+      if (fidgetQ) restQ.slerp(fidgetQ, fidgetW);
 
-      let src = null, local = null, w = 0, curl = D.cuffed ? 1 : 0;
+      let src = null, local = null, w = 0, curl = D.cuffed ? 1 : fidgetW * fidgetCurl;
+      // 手肘壓在桌上（屠夫）：手肘往外往下
+      const ep = D.persona.elbows, elbowPole = ep && !D.cuffed ? V(side * ep[0], ep[1], ep[2]) : null;
       const pole = V(side * 0.22, -0.28, -0.05);
+      if (fidgetW > 0) pole.lerp(V(side * 0.45, -0.1, -0.1), fidgetW);
       if (D.revive) { src = paddles.userData.p[i]; local = HOLD.paddle; w = 1; curl = 0.8; }
       else if (D.itemHold[i] && D.itemGrip[i] > 0) {
         const ih = D.itemHold[i];
@@ -5930,6 +6559,10 @@ const World = (() => {
         //（只有手舉離桌面以後才算：趴向桌子拿東西時臉也會靠近桌上的道具）
         if (src !== gun) pole.lerp(V(side * 0.45, -0.04, -0.05), (1 - sstep(0.2, 0.38, tp.distanceTo(faceG))) * sstep(0.15, 0.3, tp.y) * w);
       }
+      // 手肘壓桌只在休息時（拿東西、拿槍時手臂照一般的方向）
+      if (elbowPole) pole.lerp(elbowPole, (1 - w) * (1 - fidgetW) * D.calm);
+      if (i === 0) D.faceNear = 0;
+      if (src && src !== gun && src !== paddles) D.faceNear = Math.max(D.faceNear, (1 - sstep(0.25, 0.5, D.handPos[i].distanceTo(faceG))) * Math.min(1, w * 1.5));
       // 彈簧阻尼：起步和停下都是緩的
       const om = 10, vel = D.handVel[i];
       vel.addScaledVector(tp.clone().sub(D.handPos[i]), om * om * dt).multiplyScalar(Math.exp(-2 * om * dt));
@@ -5945,24 +6578,33 @@ const World = (() => {
       curls.push(curl);
       poleOff.push(pole);
       trig.push(src === gun && local === HOLD.trigger ? w : 0);
+      fids.push(fidgetW);
     }
 
     // 第二步：手搆不到時，整個上半身往前趴過去（而不是把手臂拉長）
     const L = (ARM_UP + ARM_FORE) * 0.93;
     const selfAim = gunPose === 'dealerAimSelf' && Math.max(D.grips[0], D.grips[1]) > 0.5;
-    let need = D.lean * 0.45 + (selfAim ? -0.06 : 0);
+    // 個性：瘋婆駝背、屠夫壓在桌上、寡婦挺直（被銬住、拿槍、急救時姿勢照舊）
+    // 拿東西、決定開槍（槍還沒拿起來）時姿勢馬上收掉（駝背、壓桌時舉槍，槍管會頂進下巴）；
+    // 兩手都回到休息位置後才慢慢恢復（手還在半路時就前傾，手腕會陷進身體）
+    const busy = D.cuffed || D.revive || D.itemHold[0] || D.itemHold[1] || D.grips[0] + D.grips[1] > 0.01 || gunPose.startsWith('dealerAim');
+    const calmT = !busy && D.handPos.every((h, i) => h.distanceTo(D.restNow[i]) < 0.1) ? 1 : 0;
+    D.calm += (calmT - D.calm) * (1 - Math.exp(-(calmT > D.calm ? 1.5 : 12) * dt));
+    const pose = (D.persona.bend || 0) * D.calm;
+    let need = D.lean * 0.45 + (selfAim ? -0.06 : 0) + pose;
     if (!D.revive) {
-      for (let b = Math.max(0, need); b <= 0.78; b += 0.02) {
+      // 往後挺只來自個性的姿勢（寡婦）；對自己開槍時的 -0.06 照舊只是抵銷前傾，不會往後仰
+      for (let b = Math.max(Math.min(0, pose), need); b <= 0.78; b += 0.02) {
         need = b;
         if (wristT.every((t, i) => t.distanceTo(shoulderAt(i, b)) <= L)) break;
       }
     }
     // 對自己開槍時身體收回得快一點：槍管立起來時頭還趴在前面，槍管會頂進下巴
     D.bend += (need - D.bend) * (1 - Math.exp(-(gunPose === 'dealerAimSelf' && need < D.bend ? 14 : 6) * dt));
-    D.upper.rotation.x = D.bend + breathe * 0.006;
+    D.upper.rotation.x = D.bend + breathe * 0.006 * deep;
     // 頭往回收，趴得越低越要抬頭看著你；槍口抵著下巴時下巴抬起來（槍舉上來的最後幾格槍管才不會頂進下巴）
     D.selfAimK += ((gunPose === 'dealerAimSelf' && Math.max(D.grips[0], D.grips[1]) > 0.3 ? 1 : 0) - D.selfAimK) * (1 - Math.exp(-5 * dt));
-    D.head.rotation.x = Math.sin(time * 0.5) * 0.03 - D.bend * 0.6 + D.nod - 0.3 * D.selfAimK;
+    D.head.rotation.x = Math.sin(time * 0.5) * 0.03 - D.bend * 0.6 + D.nod - 0.3 * D.selfAimK + D.lookYP[1] * D.lookW - (D.persona.chin || 0) * (1 - D.selfAimK);
 
     // 第三步：兩節手臂反向運動學
     const wristsW = [];
@@ -5982,14 +6624,14 @@ const World = (() => {
       // 限制手腕彎曲角度，超過就把手轉回來對齊前臂
       const q = D.goalQuat[i].clone();
       const wb = zh.angleTo(fore);
-      const MAX = srcs[i] === gun && i === 0 ? 1.3 : srcs[i] ? 0.95 : 0.55;
+      const MAX = srcs[i] === gun && i === 0 ? 1.3 : srcs[i] || fids[i] > 0.3 ? 0.95 : 0.55;
       if (wb > MAX) {
         const fix = new T.Quaternion().setFromUnitVectors(zh, zh.clone().lerp(fore, (wb - MAX) / wb).normalize());
         q.premultiply(fix);
       }
       hand.quaternion.copy(q);
       hand.position.copy(wrist).sub(WRIST.clone().applyQuaternion(q));
-      setCurl(hand, curls[i], i);
+      setCurl(hand, curls[i], i, fidgetFingers(i));
       // 手腕骨對齊前臂，手腕彎曲時皮膚從手背平順地接到前臂（右手是鏡像，x 要翻回來）
       const lf = fore.clone().applyQuaternion(q.clone().invert());
       lf.x *= hand.scale.x;
@@ -6843,6 +7485,7 @@ const World = (() => {
     id = id || m.userData.id;
     m.userData = {};
     const ctx = { user, hand: -1 };
+    D.watch = m;
     if (side !== user) {
       // 被偷來的道具先飛到使用者面前
       await fly(m, user === 'player' ? P.hand : DL.front, 0.7, { arc: 0.15, q: () => qFor(user, 0.2, 0, 0) });
@@ -6853,6 +7496,7 @@ const World = (() => {
       await fly(m, P.hand, 0.55, { arc: 0.08, q: () => qCam(0.3, 0, 0) });
     }
     await ITEM_ANIM[id](m, ctx);
+    if (D.watch === m) D.watch = null;
     await dealerRelease(ctx.hand);
   }
 
@@ -7201,6 +7845,7 @@ const World = (() => {
     D.itemHold = [null, null]; D.itemGrip = [0, 0];
     D.nod = 0; D.tilt = 0; D.turn = 0;
     face({});
+    D.feels.length = 0; D.talk.dur = 0; D.watch = null; D.fidget.kind = null; D.fidget.next = R(4, 8);
     if (D.cuffMesh) { scene.remove(D.cuffMesh); D.cuffMesh = null; }
     D.cuffed = false;
   }
@@ -7551,8 +8196,13 @@ const World = (() => {
     paddlesIn, paddlesZap, paddlesOut, reviveStage,
     setLook(v) { D.look = v; },
     dealerReact,
-    // 表情（給之後的角色個性、台詞用）：jaw 張嘴、smile 嘴角、brow 皺眉、wide 睜大、squint 瞇眼
+    // 表情：jaw 張嘴、smile 嘴角、brow 皺眉、wide 睜大、squint 瞇眼（反應動作那一層）
     dealerFace: face,
+    // 階段 4：事件表情（gloat、amused、pain、relief、eager、shock、tellLive、tellBlank）、心情、講話的下巴
+    dealerFeel: feel, dealerMood, dealerTalk,
+    // 小動作收手（輪到莊家時：之後要伸手拿東西，手不要從臉旁邊直接甩回來）；on = false 恢復
+    holdFidget(on = true) { D.fidget.hold = on; },
+    clock: () => time,
     setSpeed(k) { speed = k > 0 ? k : 1; },
     // 開槍的瞬間放慢：k 倍速維持 sec 秒（真實時間）
     slowmo(k, sec) { slowK = k; slowUntil = time + sec; },
@@ -7694,6 +8344,75 @@ const UI = (() => {
   }
   function skip() { if (line) line.skip(); }
 
+  // ---------- 對面角色的台詞（lines.js；單人才講，雙人的對手是真人） ----------
+  // 顯示在對話框上方另一條，跟旁白同時、不等它講完（不會拉長一場的時間）；每打出一個字下巴開合一次
+  // 同一種情境不連續講同一句、最近講過的盡量不重複；兩句之間至少隔 gap 秒（遊戲時間），chance 是這次講不講的機率
+  const SPEAK_MS = 150;      // 每個字（1× 速度）
+  let lastLine = -1e9, speechTimer = 0, speechToken = 0;
+  const recent = [];
+  function speak(kind, { chance = 1, gap = 4, delay = 0 } = {}) {
+    const s = Game.s;
+    if (!s || s.mp || typeof LINES === 'undefined') return false;
+    const set = (LINES[s.char] || LINES.dealer)[kind];
+    if (!set || !set.length || Math.random() > chance) return false;
+    if (World.clock() - lastLine < gap) return false;
+    const fresh = set.filter(t => !recent.includes(t)), pool = fresh.length ? fresh : set;
+    const text = pool[Math.floor(Math.random() * pool.length)];
+    recent.push(text);
+    if (recent.length > 30) recent.shift();
+    lastLine = World.clock() + delay;
+    if (delay > 0) World.wait(delay).then(() => showSpeech(text)); else showSpeech(text);
+    return true;
+  }
+  function showSpeech(text) {
+    const box = $('#speech'), el = box.querySelector('.txt'), my = ++speechToken;
+    clearTimeout(speechTimer);
+    box.querySelector('.who').textContent = CHAR_NAME[Game.s.char] || '莊家';
+    el.textContent = '';
+    box.classList.add('on');
+    let i = 0;
+    const step = () => {
+      if (my !== speechToken) return;
+      if (i >= text.length) {
+        World.dealerTalk(null);
+        // 講完停一下再淡出：字越多停越久
+        speechTimer = setTimeout(() => { if (my === speechToken) box.classList.remove('on'); }, (1400 + text.length * 60) / pace);
+        return;
+      }
+      const ch = text[i++];
+      el.textContent += ch;
+      World.dealerTalk(ch, SPEAK_MS / pace);
+      // 標點停久一點
+      speechTimer = setTimeout(step, (/[，。！？…、—]/.test(ch) ? SPEAK_MS * 2.2 : SPEAK_MS) / pace);
+    };
+    step();
+  }
+  function hideSpeech() { speechToken++; clearTimeout(speechTimer); $('#speech').classList.remove('on'); World.dealerTalk(null); }
+  const CHAR_NAME = { dealer: '莊家', widow: '寡婦', butcher: '屠夫', crone: '瘋婆' };
+  // 道具 → 他用的時候講什麼
+  const ITEM_LINE = { cigarettes: 'heal', saw: 'saw', handcuffs: 'cuff', magnifier: null, beer: 'beer', phone: 'phone', inverter: 'invert', adrenaline: 'steal', medicine: null };
+  let lowSaid = { dealer: false, player: false };
+
+  // game.js 的事件（規則都已經算完了，這裡只決定表情與台詞）
+  function event(kind, a = {}) {
+    const s = Game.s;
+    if (!s) return;
+    if (kind === 'turn') {
+      World.holdFidget(a.who === 'dealer');
+      if (a.who === 'dealer') speak('think', { chance: 0.3 });
+      else speak('wait', { chance: 0.12, delay: 2.5 });
+    } else if (kind === 'peek' && a.user === 'dealer' && !s.mp) {
+      // 破綻：看到實彈藏不住表情（各角色程度不同，瘋婆不管看到什麼都可能笑）
+      World.dealerFeel(a.v ? 'tellLive' : 'tellBlank');
+      speak('peek', { chance: 0.6 });
+    } else if (kind === 'heal' && a.user === 'dealer') {
+      World.dealerFeel('relief');
+    } else if (kind === 'medBad' && a.user === 'dealer') {
+      World.dealerFeel('pain');
+      speak('medBad', { gap: 0 });
+    }
+  }
+
   function renderItems(s) { World.syncItems(s.items); }
 
   function renderHP(s) {
@@ -7708,6 +8427,12 @@ const UI = (() => {
     row('player', s.name);
     $('#m-round').textContent = ROMAN[s.round];
     $('#monitor').classList.toggle('cut', s.wiresCut);
+    // 對面的心情：自己的血越少喘得越重，你的血越少笑得越開（雙人時表情也跟著電量走）
+    World.dealerMood(s.hp.dealer / s.max, s.hp.player / s.max, s.hp.dealer);
+    for (const w of ['dealer', 'player']) {
+      if (s.hp[w] === 1 && s.max > 1 && !lowSaid[w]) { lowSaid[w] = true; speak(w === 'dealer' ? 'low' : 'youLow', { gap: 1, delay: 0.8 }); }
+      if (s.hp[w] > 1) lowSaid[w] = false;
+    }
     // 心跳層：第三局一直都在（線路切斷後加快）；任何一方只剩 1 點電量時最快最大聲
     const low = Math.min(s.hp.player, s.hp.dealer);
     if (s.round === 3) SFX.setHeart(low <= 1 ? 112 : s.wiresCut ? 92 : 72, low <= 1 ? 1.1 : s.wiresCut ? 0.85 : 0.5);
@@ -7783,6 +8508,8 @@ const UI = (() => {
     eyes(1, 0, 0);
     loads = 0;
     react = null;
+    hideSpeech();
+    lowSaid = { dealer: false, player: false };
   }
 
   function setSawed(on) { World.setSawed(on); }
@@ -7813,6 +8540,7 @@ const UI = (() => {
     if (!SFX.sting('hit1', { gain: 0.3, lp: 500, attack: 0.06 })) SFX.play('sting');
     await World.cam('seat', 2.6, 'inOut');
     b.hidden = true;
+    speak(r === 1 ? 'intro' : Math.random() < 0.5 ? 'back' : 'round', { gap: 0 });
   }
 
   async function presentShells(live, blank) {
@@ -7841,6 +8569,7 @@ const UI = (() => {
     } else {
       World.cam('dealer', 0.8);
       // 右手先伸過去握住桌上的槍，舉起來的途中左手再托住護木
+      speak(target === 'player' ? 'aimYou' : 'aimSelf', { chance: 0.55 });
       await World.dealerGripHand(0, true, 0.85);
       const lift = World.gunTo(target === 'player' ? 'dealerAimPlayer' : 'dealerAimSelf', 1.4);
       await World.wait(0.55);
@@ -7872,7 +8601,7 @@ const UI = (() => {
     await World.wait(0.5);
   }
 
-  async function bang(target) {
+  async function bang(target, shooter) {
     SFX.duck(0.05, 0.9, 2.5);
     SFX.play('shot');
     SFX.deafen(target === 'player' ? 1 : 0.6);
@@ -7881,12 +8610,16 @@ const UI = (() => {
     flash('#fx-flash');
     if (target === 'dealer') {
       await World.dealerHit();
+      if (Game.s.hp.dealer > 0) { World.dealerFeel('pain'); speak(shooter === 'dealer' ? 'hurtSelf' : 'youHit', { gap: 0, delay: 0.3 }); }
       return;
     }
+    // 你中彈：他笑（他自己開的槍更得意）
+    World.dealerFeel(shooter === 'dealer' ? 'gloat' : 'amused');
     flash('#fx-red');
     bloodScreen();
     World.shake(0.1);
     if (Game.s.hp.player <= 0) { await fall(); return; }
+    speak(shooter === 'dealer' ? 'hitYou' : 'youHurt', { gap: 0, delay: 1.2 });
     World.cam('jerk', 0.15, 'out');
     await eyes(0, 4, 0.12);
     await World.wait(0.9);
@@ -7905,6 +8638,7 @@ const UI = (() => {
     flash('#click-text', 'show');
     World.shake(0.008);
     const kind = shooter === 'player' ? (target === 'dealer' ? 'smug' : 'stare') : (target === 'dealer' ? 'relief' : 'tsk');
+    speak({ smug: 'youMiss', stare: 'youSafe', relief: 'safeSelf', tsk: 'missYou' }[kind], { chance: 0.7, gap: 0, delay: 1.1 });
     if (kind === 'smug') World.wait(0.35).then(() => World.dealerReact('smug'));
     else react = kind;
     await World.wait(0.85);
@@ -7941,6 +8675,11 @@ const UI = (() => {
     const label = $('#item-label');
     label.textContent = ITEMS[id].name;
     flash('#item-label', 'show');
+    const user = toward || side;
+    if (user === 'dealer' && ITEM_LINE[id]) speak(ITEM_LINE[id], { chance: 0.6, delay: 0.4 });
+    if (user === 'player' && side === 'player') speak({ handcuffs: 'youCuff', saw: 'youSaw' }[id], { chance: 0.6, delay: 0.6 });
+    if (user === 'player' && side === 'dealer') speak('youSteal', { chance: 0.8, delay: 0.4 });
+    if (user === 'dealer' && id === 'saw') World.dealerFeel('eager');
     await World.useItem(side, slot, viewer, id);
   }
   // 道具的結果說完了，鏡頭回到座位
@@ -8048,6 +8787,8 @@ const UI = (() => {
     cashEl.hidden = !win || s.mp;
     e.querySelector('#btn-again').textContent = s.mp ? '回到標題' : '再玩一次';
     e.hidden = false;
+    // 你輸了：他最後說一句（你贏的時候他已經倒下了）
+    if (!win) speak('lose', { gap: 0, delay: 0.8 });
     if (win && !s.mp) {
       const num = cashEl.querySelector('b');
       const t0 = performance.now();
@@ -8082,6 +8823,8 @@ const UI = (() => {
     await World.cutPower();
     SFX.music(4);
     await World.cam('seat', 1.2);
+    World.dealerFeel('shock');
+    speak('wires', { gap: 0 });
   }
 
   // 雙人：對手離開房間
@@ -8117,7 +8860,7 @@ const UI = (() => {
     build, say, renderItems, renderHP, renderInfo, renderAll, setInteractive,
     openAim, closeAim, previewAim, resetTable, setSawed, resetGun, roundBanner, presentShells,
     aim, bang, dryFire, eject, peek, itemFx, itemDone, pickSteal, resolveSteal, isStealing, hurt,
-    dealerDown, blackout, showEnd, showLeft, tip, cutWires, reaperRevive, coinFlip, skip,
+    dealerDown, blackout, showEnd, showLeft, tip, cutWires, reaperRevive, coinFlip, skip, event, speak,
     isAiming: () => aiming,
     // 演出速度：3D 動畫、對話打字、規則流程的停頓一起變快
     setPace(k) { pace = k; World.setSpeed(k); Game.setPace(k); },
@@ -8167,7 +8910,10 @@ function boot() {
   const diff = () => ($('input[name="diff"]:checked') || {}).value === 'hard' ? 'hard' : 'easy';
   function begin(name, opts) {
     // 單人：莊家穿自己選的外觀；雙人：對手穿他自己選的
-    World.setDealerSkin(opts.mp ? opts.mp.oppSkin : Settings.get().skin);
+    const skin = opts.mp ? opts.mp.oppSkin : Settings.get().skin;
+    World.setDealerSkin(skin);
+    // 單人時角色決定 AI 的打法與台詞
+    opts.char = skin;
     SFX.play('sign');
     $('#waiver').hidden = true;
     $('#lobby').hidden = true;
