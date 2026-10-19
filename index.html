@@ -290,11 +290,82 @@ b.blank { color: var(--blank); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
+/* ---------- 載入／轉場：左輪彈巢 ---------- */
+/* 一圈 4.8 秒：每 0.6 秒塞一發進最上面的彈膛、彈巢「喀」一聲轉一格；六發裝滿後甩一圈、子彈退出來，重來
+   只動 transform／opacity：主執行緒在雕角色的時候瀏覽器還是能繼續轉 */
+#loader {
+  position: absolute; inset: 0; z-index: 55; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(ellipse at 50% 45%, #15120f, #040505 70%); transition: opacity .45s;
+}
+#loader.out { opacity: 0; pointer-events: none; }
+.ld-gun { position: relative; width: 150px; height: 150px; margin: 24px 0 18px; transform: scale(1.3); filter: drop-shadow(0 18px 24px rgba(0, 0, 0, .9)); }
+.ld-cyl {
+  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+  background: radial-gradient(circle at 38% 32%, #6d6f6c, #2e302e 45%, #141514 75%, #0a0b0a);
+  box-shadow: inset 0 0 0 3px #1c1d1c, inset 0 0 18px rgba(0, 0, 0, .8);
+  animation: ld-spin 4.8s infinite;
+}
+.ld-ch { position: absolute; inset: 0; }
+/* 彈巢外緣兩個彈膛之間的凹槽 */
+.ld-ch::after { content: ''; position: absolute; inset: 0; transform: rotate(30deg); background: radial-gradient(circle at 50% -2%, #050505 13px, rgba(5, 5, 5, .6) 15px, transparent 17px); }
+/* 空彈膛 */
+.ld-ch::before {
+  content: ''; position: absolute; left: calc(50% - 18px); top: 13px; width: 36px; height: 36px; border-radius: 50%;
+  background: radial-gradient(circle, #000 52%, #1a1a19 64%, #3d3e3b 72%, #1b1c1b 80%);
+}
+/* 子彈的屁股：黃銅彈殼底緣＋中間的底火 */
+.ld-ch b {
+  position: absolute; left: calc(50% - 16px); top: 15px; width: 32px; height: 32px; border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle at 50% 50%, #e7c77a 0 15%, #7a5a22 19%, #c79c4a 23% 58%, #f0d18a 64%, #8a6a2c 74%, #3a2a10 86%);
+  box-shadow: 0 0 6px rgba(240, 200, 120, .25);
+  animation: 4.8s infinite cubic-bezier(.2, .9, .3, 1.2);
+}
+.ld-pin { position: absolute; left: calc(50% - 13px); top: calc(50% - 13px); width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #8a8c88, #2a2b2a 70%); box-shadow: 0 0 0 4px #121312; }
+/* 上面的裝填口（固定不轉） */
+.ld-gate { position: absolute; left: calc(50% - 26px); top: -12px; width: 52px; height: 18px; z-index: 1; border-radius: 4px 4px 10px 10px; background: linear-gradient(#3b3c39, #161716); box-shadow: 0 2px 0 #000, inset 0 1px 0 rgba(255, 255, 255, .15); }
+.ld-gate::after { content: ''; position: absolute; left: calc(50% - 3px); bottom: -7px; border: 6px solid transparent; border-top-color: var(--brass); border-bottom: 0; transform: translateX(-3px); }
+.ld-big { margin: 10px 0 0; font-family: var(--f-pixel); font-size: 34px; letter-spacing: .4em; padding-left: .4em; color: var(--bone); }
+.ld-big::after { content: ''; display: inline-block; width: 1.6em; text-align: left; animation: ld-dots 1.2s steps(4) infinite; }
+.ld-sub { margin: 0; font-family: var(--f-body); font-size: 15px; letter-spacing: .12em; color: var(--dim); }
+@keyframes ld-dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+@keyframes ld-spin {
+  0%, 7.5% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.3, 1.5, .5, 1); }
+  12.5%, 20% { transform: rotate(60deg); animation-timing-function: cubic-bezier(.3, 1.5, .5, 1); }
+  25%, 32.5% { transform: rotate(120deg); animation-timing-function: cubic-bezier(.3, 1.5, .5, 1); }
+  37.5%, 45% { transform: rotate(180deg); animation-timing-function: cubic-bezier(.3, 1.5, .5, 1); }
+  50%, 57.5% { transform: rotate(240deg); animation-timing-function: cubic-bezier(.3, 1.5, .5, 1); }
+  62.5%, 70% { transform: rotate(300deg); animation-timing-function: cubic-bezier(.3, 1.5, .5, 1); }
+  75%, 78% { transform: rotate(360deg); animation-timing-function: cubic-bezier(.15, .6, .25, 1); }
+  96%, 100% { transform: rotate(1080deg); }
+}
+@keyframes ld-b0 { 0% { opacity: 0; transform: scale(1.9); } 5% { opacity: 1; transform: scale(1); } 93% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(.5); } }
+@keyframes ld-b1 { 0%, 12.5% { opacity: 0; transform: scale(1.9); } 17.5% { opacity: 1; transform: scale(1); } 93% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(.5); } }
+@keyframes ld-b2 { 0%, 25% { opacity: 0; transform: scale(1.9); } 30% { opacity: 1; transform: scale(1); } 93% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(.5); } }
+@keyframes ld-b3 { 0%, 37.5% { opacity: 0; transform: scale(1.9); } 42.5% { opacity: 1; transform: scale(1); } 93% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(.5); } }
+@keyframes ld-b4 { 0%, 50% { opacity: 0; transform: scale(1.9); } 55% { opacity: 1; transform: scale(1); } 93% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(.5); } }
+@keyframes ld-b5 { 0%, 62.5% { opacity: 0; transform: scale(1.9); } 67.5% { opacity: 1; transform: scale(1); } 93% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(.5); } }
+.ld-ch:nth-child(1) { transform: rotate(0deg); } .ld-ch:nth-child(1) b { animation-name: ld-b0; }
+.ld-ch:nth-child(2) { transform: rotate(-60deg); } .ld-ch:nth-child(2) b { animation-name: ld-b1; }
+.ld-ch:nth-child(3) { transform: rotate(-120deg); } .ld-ch:nth-child(3) b { animation-name: ld-b2; }
+.ld-ch:nth-child(4) { transform: rotate(-180deg); } .ld-ch:nth-child(4) b { animation-name: ld-b3; }
+.ld-ch:nth-child(5) { transform: rotate(-240deg); } .ld-ch:nth-child(5) b { animation-name: ld-b4; }
+.ld-ch:nth-child(6) { transform: rotate(-300deg); } .ld-ch:nth-child(6) b { animation-name: ld-b5; }
+@media (prefers-reduced-motion: reduce) { .ld-cyl, .ld-ch b { animation-duration: 9.6s; } }
+
 </style>
-<script>window.BUILD = { target: "web", at: "2026-10-16 10:52" };</script>
+<script>window.BUILD = { target: "web", at: "2026-10-19 14:56" };</script>
 </head>
 <body>
 <div id="viewport">
+  <!-- 載入／轉場：左輪彈巢一發一發裝子彈、轉一格（純 CSS，腳本還沒跑完就會動） -->
+  <div id="loader" role="status" aria-live="polite">
+    <div class="ld-gun" aria-hidden="true">
+      <i class="ld-gate"></i>
+      <div class="ld-cyl"><i class="ld-ch"><b></b></i><i class="ld-ch"><b></b></i><i class="ld-ch"><b></b></i><i class="ld-ch"><b></b></i><i class="ld-ch"><b></b></i><i class="ld-ch"><b></b></i><i class="ld-pin"></i></div>
+    </div>
+    <p class="ld-big">裝填中</p>
+    <p class="ld-sub">正在載入資源……</p>
+  </div>
   <canvas id="gl"></canvas>
   <div id="lids"><i class="lid top"></i><i class="lid bot"></i></div>
   <div id="stage" class="idle">
@@ -447,7 +518,6 @@ b.blank { color: var(--blank); }
           <button type="button" data-v="butcher"><b>屠夫</b><small>男・平頭鬍渣<br>張嘴咆哮・肥胖</small></button>
           <button type="button" data-v="crone"><b>瘋婆</b><small>女・灰白髮髻<br>咧嘴狂笑・乾瘦</small></button>
         </div>
-        <p class="set-note" id="char-busy" hidden>正在雕刻這個角色……</p>
         <button id="settings-close" type="button">完成</button>
       </div>
     </section>
@@ -3915,7 +3985,8 @@ const WK = (() => {
       paint: { base: [188, 150, 128], lip: [122, 52, 46], blood: true, tears: false, wrinkle: 0.7, stubble: 1 },
       teeth: { missing: [-5, -1, 3, 6], color: 0xc8b886 },
       body: { w: 1.32, d: 1.38, belly: 0.13, chest: 0, shoulder: 1.22, arm: 1.28 },
-      persona: { face: { smile: -0.3, brow: 0.45 }, bend: 0.22, chin: 0, elbows: [0.45, -0.15, -0.12], rest: [[-0.11, 0, 0.6], [0.11, 0, 0.6]], fidget: 'knuckles', tell: { live: [2.2, 1, 0.08, 0.45, -0.3], blank: [1.2, -0.5, 0, 0, 0.6] } },
+      persona: { face: { smile: -0.3, brow: 0.45 }, bend: 0.22, chin: 0, elbows: [0.45, -0.15, -0.12], rest: [[-0.11, 0, 0.6], [0.11, 0, 0.6]], fidget: 'knuckles',
+        cuffed: [0.042, 0.04, 0.56], tell: { live: [2.2, 1, 0.08, 0.45, -0.3], blank: [1.2, -0.5, 0, 0, 0.6] } },
     },
     crone: {
       tint: 0xfff0cc, rough: 0.62, hair: 'bun', hairColor: 0xf2eee6, eyes: 'milky', glow: 0xf4fff0, outfit: 'shawl',
@@ -6490,7 +6561,9 @@ const World = (() => {
     for (let i = 0; i < 2; i++) {
       const side = i ? 1 : -1;
       // 個性的休息位置（屠夫兩手往前壓在桌上）只在沒事的時候；忙的時候用一般的位置（不然另一隻手搆不到，身體會被拉著往前傾）
-      const rest = D.cuffed ? V(side * 0.042, 0.04, 0.4) : REST0[i].clone().lerp(D.rest[i], D.calm);
+      // 被銬住時兩手併在身體前面（[x, y, z]，角色可以自己設：屠夫肚子大要放遠一點）
+      const cp = D.persona.cuffed || [0.042, 0.04, 0.4];
+      const rest = D.cuffed ? V(side * cp[0], cp[1], cp[2]) : REST0[i].clone().lerp(D.rest[i], D.calm);
       D.restNow[i].copy(rest);
       rest.y += 0.019 + Math.max(0, Math.sin(time * 0.9 + i * 2)) * 0.003;
       // 寡婦拉面紗：右手舉到臉旁捏住面紗下緣往下拉一下（捏的點在頭的座標，由面紗提供）
@@ -6541,8 +6614,8 @@ const World = (() => {
         src = gun;
         local = i === 0 ? (self ? HOLD.selfLow : HOLD.trigger) : (self ? HOLD.selfHigh : HOLD.pump);
         w = D.grips[i]; curl = 0.9 * w;
-        // 槍托抵肩時握把離肩膀很近，手肘要往外抬，前臂才比較順著手的方向（不然手腕會折太多、手掌被轉進槍托）
-        if (local === HOLD.trigger) pole.lerp(V(side * 0.3, -0.12, 0), w);
+        // 槍托抵肩時握把離肩膀很近，手肘往外、往下放（大約跟肩膀一樣高；再高看起來像在聳肩）
+        if (local === HOLD.trigger) pole.lerp(V(side * 0.45, -0.3, 0), w);
       }
       const tp = rest, tq = restQ;
       if (src) {
@@ -6624,7 +6697,8 @@ const World = (() => {
       // 限制手腕彎曲角度，超過就把手轉回來對齊前臂
       const q = D.goalQuat[i].clone();
       const wb = zh.angleTo(fore);
-      const MAX = srcs[i] === gun && i === 0 ? 1.3 : srcs[i] || fids[i] > 0.3 ? 0.95 : 0.55;
+      // 握扳機時手肘放低了，手腕要多彎一點才握得住（其他拿槍的姿勢照舊）
+      const MAX = trig[i] > 0 ? 1.8 : srcs[i] === gun && i === 0 ? 1.3 : srcs[i] || fids[i] > 0.3 ? 0.95 : 0.55;
       if (wb > MAX) {
         const fix = new T.Quaternion().setFromUnitVectors(zh, zh.clone().lerp(fore, (wb - MAX) / wb).normalize());
         q.premultiply(fix);
@@ -8187,6 +8261,10 @@ const World = (() => {
     cutPower, setPower, reaperRevive, setQuality, setCharacter, coinFlip,
     // 舊名字：外觀現在是整個角色
     setDealerSkin: id => setCharacter(id),
+    // 這個角色的頭和身體雕過了沒（沒雕過的換上去要等一兩秒）
+    charCached: id => !!(WK.Head.cache[id] && WK.Body.cache[id]),
+    // 目前角色的頭和身體都雕好、接上後才結束（雕過的馬上結束）
+    charReady: () => Promise.all([WK.Head.get(charId, CHARS[charId]), WK.Body.get(charId, CHARS[charId])]).then(() => {}),
     // 設定畫面的角色預覽：鏡頭拉近到莊家（對手）的臉，慢慢左右轉
     preview(on) {
       previewing = on;
@@ -8882,6 +8960,8 @@ function boot() {
     showFatal(err);
     return;
   }
+  // 頁面一打開就蓋著轉彈巢的畫面，角色雕好才掀開
+  Loader.cover(['正在載入資源……', '正在構建場景……', '正在準備角色……'], () => World.charReady(), 1.2);
 
   // 標題 → 免責聲明
   $('#btn-start').addEventListener('click', () => {
@@ -8911,14 +8991,19 @@ function boot() {
   function begin(name, opts) {
     // 單人：莊家穿自己選的外觀；雙人：對手穿他自己選的
     const skin = opts.mp ? opts.mp.oppSkin : Settings.get().skin;
-    World.setDealerSkin(skin);
     // 單人時角色決定 AI 的打法與台詞
     opts.char = skin;
     SFX.play('sign');
     $('#waiver').hidden = true;
     $('#lobby').hidden = true;
-    $('#stage').classList.remove('idle');
-    Game.newGame(name, opts);
+    // 轉場：彈巢轉一下再入座；對手的角色還沒雕過就等它雕好（雙人時對方的訊息會排隊等）
+    Loader.cover(['玩家準備中……', '即將開始……'], () => {
+      World.setDealerSkin(skin);
+      return World.charReady();
+    }, 1.1).then(() => {
+      $('#stage').classList.remove('idle');
+      Game.newGame(name, opts);
+    });
   }
 
   $('#waiver-form').addEventListener('submit', e => {
@@ -9057,11 +9142,13 @@ function boot() {
   seg('#opt-quality', 'quality', v => World.setQuality(v));
   seg('#opt-speed', 'speed', v => UI.setPace(+v));
   // 對局中的雙人：畫面上的莊家是對手，不跟著換
-  // 第一次選某個角色要雕一秒左右：先顯示提示、讓畫面更新，再開始雕
+  // 第一次選某個角色要雕一秒左右：先蓋上彈巢畫面、讓畫面更新，再開始雕
   seg('#opt-skin', 'skin', v => {
     if (Game.s && Game.s.mp && !Game.s.over) return;
-    $('#char-busy').hidden = false;
-    setTimeout(() => { World.setCharacter(v); $('#char-busy').hidden = true; }, 60);
+    // 單人對局中換角色：台詞與 AI 打法也跟著換
+    if (Game.s && !Game.s.mp) { Game.s.char = v; Game.s.persona = AI.PERSONA[v] || 'calc'; }
+    if (World.charCached(v)) { World.setCharacter(v); return; }
+    Loader.cover('正在載入角色……', () => { World.setCharacter(v); return World.charReady(); });
   });
   // 在標題畫面打開：鏡頭拉近看角色；遊戲中打開就只改設定
   let previewing = false;
@@ -9088,14 +9175,16 @@ function boot() {
     // 不能用 location.reload()：Google Apps Script 的網頁應用程式在 iframe 裡重新整理會變成白畫面
     if (Game.s.mp) { backToTitle(); return; }
     $('#end').hidden = true;
-    Game.newGame(Game.s.name, { diff: Game.s.diff });
+    Game.newGame(Game.s.name, { diff: Game.s.diff, char: Settings.get().skin });
   });
 }
 
 function backToTitle() {
   const $ = sel => document.querySelector(sel);
   $('#end').hidden = true;
-  World.setDealerSkin(Settings.get().skin);
+  const skin = Settings.get().skin;
+  if (World.charCached(skin)) World.setDealerSkin(skin);
+  else Loader.cover('正在返回大廳……', () => { World.setDealerSkin(skin); return World.charReady(); });
   Net.reset();
   if (Game.s) { Game.s.over = true; Game.s.busy = true; }
   UI.setInteractive(false);
@@ -9123,7 +9212,46 @@ const Settings = (() => {
   };
 })();
 
+// 載入／轉場畫面（index.html 的 #loader，一打開頁面就在轉）
+const Loader = (() => {
+  const el = () => document.querySelector('#loader');
+  let n = 0, timer = 0, step = 0;
+  // sub 可以是一串文字：每 1.6 秒換下一句，停在最後一句
+  function show(sub) {
+    const e = el(), list = [].concat(sub), txt = e.querySelector('.ld-sub');
+    n++;
+    clearTimeout(timer);
+    clearInterval(step);
+    let i = 0;
+    txt.textContent = list[0];
+    if (list.length > 1) step = setInterval(() => { txt.textContent = list[Math.min(++i, list.length - 1)]; if (i >= list.length - 1) clearInterval(step); }, 1600);
+    e.hidden = false;
+    e.classList.remove('out');
+  }
+  function hide() {
+    if (--n > 0) return;
+    n = 0;
+    clearInterval(step);
+    const e = el();
+    e.classList.add('out');
+    timer = setTimeout(() => { e.hidden = true; }, 500);
+  }
+  // 蓋上畫面 → 等一下讓它真的畫出來 → 跑 start（回傳 Promise）→ 至少轉 min 秒 → 掀開
+  async function cover(sub, start, min = 0.9) {
+    show(sub);
+    const t0 = performance.now();
+    try {
+      await new Promise(r => setTimeout(r, 60));
+      await start();
+      const left = min * 1000 - (performance.now() - t0);
+      if (left > 0) await new Promise(r => setTimeout(r, left));
+    } finally { hide(); }
+  }
+  return { show, hide, cover };
+})();
+
 function showFatal(err) {
+  document.querySelector('#loader').hidden = true;
   const el = document.querySelector('#fatal');
   el.querySelector('p').textContent = (err && err.message) || String(err);
   el.hidden = false;
