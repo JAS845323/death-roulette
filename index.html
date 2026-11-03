@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>死亡輪盤</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=Noto+Sans+TC:wght@400;700;900&family=Noto+Serif+TC:wght@400;700&display=swap">
+<link rel="preload" href="assets/fonts/Cubic_11.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+/* 像素字型：Cubic 11（俐方體11號，OFL，assets/fonts） */
+@font-face { font-family: 'Cubic11'; src: url('assets/fonts/Cubic_11.woff2') format('woff2'); font-display: swap; }
+
 /* Layout: 固定 1280×800 場景等比縮放；第一人稱俯視一張傾斜的桌子，莊家坐在對面 */
 :root {
   --ink: #040505;
@@ -17,9 +18,12 @@
   --blank: #4c7fd6;
   --crt: #8dffa8;
   --brass: #b08838;
-  --f-pixel: 'VT323', 'Noto Sans TC', monospace;
-  --f-body: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
-  --f-serif: 'Noto Serif TC', 'PMingLiU', serif;
+  /* 全部文字都用同一種中文像素字型 */
+  --f-pixel: 'Cubic11', 'Microsoft JhengHei', monospace;
+  --f-body: var(--f-pixel);
+  --f-serif: var(--f-pixel);
+  /* 白字黑邊（不模糊、一格一格的描邊） */
+  --outline: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000, 2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000;
   --k: 1;
   color-scheme: dark;
 }
@@ -27,6 +31,8 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; background: var(--ink); color: var(--bone); overflow: hidden; }
+/* 像素字不要反鋸齒（能關的瀏覽器就關） */
+body { -webkit-font-smoothing: none; -moz-osx-font-smoothing: grayscale; font-smooth: never; text-rendering: optimizeSpeed; }
 button { font: inherit; color: inherit; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--crt); outline-offset: 3px; }
 
@@ -39,117 +45,56 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--crt); outli
 #scene { position: absolute; inset: 0; }
 
 /* ---------- 3D 畫布與眼皮 ---------- */
-#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; image-rendering: pixelated; }
 #lids { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; --open: 1; }
 .lid { position: absolute; left: -15%; width: 130%; height: 64%; background: #000; }
 .lid.top { top: 0; border-radius: 0 0 50% 50% / 0 0 45% 45%; transform: translateY(calc(var(--open) * -112%)); box-shadow: 0 30px 50px 10px #000; }
 .lid.bot { bottom: 0; border-radius: 50% 50% 0 0 / 45% 45% 0 0; transform: translateY(calc(var(--open) * 112%)); box-shadow: 0 -30px 50px 10px #000; }
 #stage { z-index: 2; pointer-events: none; }
 #stage button, #stage input, #stage .overlay, #stage .help-box, #stage .paper { pointer-events: auto; }
-.hint { margin: 0; font-size: 13px; line-height: 1.6; color: var(--dim); }
-#stage:not(.my-turn) .hint { visibility: hidden; }
-/* 標題與簽名畫面時還沒開局：回合、情報、除顫器、對話框都先藏起來 */
-#stage.idle #scene { visibility: hidden; }
+/* 標題與簽名畫面時還沒開局：字幕、選單鈕都先藏起來 */
+#stage.idle #scene, #stage.idle #btn-menu { visibility: hidden; }
 
-/* ---------- 資訊面板 ---------- */
-#info { position: absolute; left: 34px; top: 30px; width: 290px; display: flex; flex-direction: column; gap: 10px; }
-#round-label { font-family: var(--f-pixel); font-size: 54px; line-height: .9; letter-spacing: .04em; color: var(--bone); text-shadow: 2px 0 rgba(208, 53, 42, .5), -2px 0 rgba(76, 127, 214, .4); }
-#turn { font-size: 18px; font-weight: 700; letter-spacing: .12em; color: var(--crt); }
-#turn.dealer { color: var(--live); }
-.intel { padding: 12px 14px; background: rgba(0, 0, 0, .5); border: 1px solid rgba(228, 221, 198, .14); }
-.intel-h { font-size: 13px; letter-spacing: .2em; color: var(--dim); display: flex; justify-content: space-between; }
-#intel-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 16px; }
-#intel-list li { display: flex; justify-content: space-between; gap: 10px; }
-#intel-list li.none { color: var(--dim); font-size: 14px; }
-#intel-list b { font-family: var(--f-pixel); font-weight: 400; font-size: 21px; line-height: 1; }
-b.live { color: var(--live); }
-b.blank { color: var(--blank); }
-#shell-count { letter-spacing: .08em; }
-#shell-count .live { color: var(--live); }
-#shell-count .blank { color: var(--blank); }
-/* 四顆按鈕擠不下 290px 時換到第二行，不要把字擠成一個字一行 */
-.tools { display: flex; flex-wrap: wrap; gap: 8px; }
-.tools button { white-space: nowrap; }
-.tools button, #aim button, #steal-cancel, .overlay button {
-  font-family: var(--f-body); font-size: 14px; letter-spacing: .08em; padding: 7px 12px; cursor: pointer;
-  background: rgba(0, 0, 0, .55); border: 1px solid rgba(228, 221, 198, .3); color: var(--bone);
-  transition: background .2s, color .2s;
+/* 按鈕：黑底、細框、像素字 */
+#steal-cancel, .overlay button {
+  font-family: var(--f-pixel); font-size: 24px; padding: 8px 18px; cursor: pointer;
+  background: rgba(0, 0, 0, .6); border: 2px solid rgba(228, 221, 198, .4); color: var(--bone);
 }
-.tools button:hover, #aim button:hover, #steal-cancel:hover, .overlay button:hover { background: var(--bone); color: #0a0b0a; }
+#steal-cancel:hover, .overlay button:hover { background: var(--bone); color: #0a0b0a; }
 
-/* 除顫器顯示器 */
-#monitor { position: absolute; right: 34px; top: 30px; width: 310px; padding: 14px 14px 8px; background: linear-gradient(#262823, #121310); border-radius: 10px; box-shadow: 0 20px 40px rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .08); }
-#monitor .screen {
-  position: relative; padding: 10px 14px; border-radius: 6px; overflow: hidden;
-  background: radial-gradient(ellipse at 50% 40%, #0f2416, #040b06); color: var(--crt);
-  font-family: var(--f-pixel); font-size: 28px; line-height: 1.15; text-shadow: 0 0 8px rgba(141, 255, 168, .7);
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, .9);
+/* 右上角的選單小圖示：手機上點它開暫停選單（電腦按 ESC） */
+#btn-menu {
+  position: absolute; right: 14px; top: 12px; z-index: 30; width: 48px; height: 48px; padding: 0; cursor: pointer;
+  font-family: var(--f-pixel); font-size: 36px; line-height: 1; color: rgba(255, 255, 255, .55); background: none; border: 0; text-shadow: var(--outline);
 }
-#monitor .screen::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(transparent 0 2px, rgba(0, 0, 0, .35) 2px 3px); pointer-events: none; }
-.mrow { display: flex; align-items: center; gap: 8px; }
-.mhead { justify-content: space-between; color: rgba(141, 255, 168, .55); font-size: 22px; }
-.mname { min-width: 92px; }
-.mtag { font-family: var(--f-body); font-size: 12px; color: #ffd36b; text-shadow: none; }
-.bolts { margin-left: auto; display: flex; gap: 3px; }
-.bolts span { display: inline-flex; width: 15px; height: 24px; }
-.bolts .off { opacity: .14; }
-.bolt { width: 100%; height: 100%; }
-.mwarn { display: none; color: #ff6b5b; font-size: 22px; text-shadow: 0 0 8px rgba(255, 80, 60, .8); animation: blink 1s steps(2) infinite; }
-.mlabel { margin-top: 6px; font-size: 11px; letter-spacing: .2em; color: var(--dim); text-align: center; }
-#monitor.cut .mwarn { display: block; }
-#monitor.cut .screen { animation: glitch 2.6s infinite; }
-.mrow.hurt { animation: hurt .6s; }
-@keyframes hurt { 30% { color: #ff6b5b; transform: translateX(-4px); } 60% { transform: translateX(4px); } }
+#btn-menu:hover { color: #fff; }
+#pause { background: rgba(0, 0, 0, .78); z-index: 60; }
+.pause-box { display: flex; flex-direction: column; align-items: stretch; gap: 12px; width: 360px; text-align: center; }
+.pause-box h2 { margin: 0 0 8px; font-size: 48px; font-weight: 400; color: #fff; text-shadow: var(--outline); }
+#pause-info { margin: 0 0 8px; min-height: 1em; font-size: 24px; line-height: 1.4; color: var(--dim); }
+#pause-info .live { color: var(--live); }
+#pause-info .blank { color: var(--blank); }
+
+#click-text { position: absolute; left: 50%; top: 290px; transform: translateX(-50%); font-family: var(--f-pixel); font-size: 48px; color: #fff; text-shadow: var(--outline); opacity: 0; pointer-events: none; }
 @keyframes blink { 50% { opacity: 0; } }
-@keyframes glitch { 0%, 90%, 100% { transform: none; filter: none; } 92% { transform: translateX(-3px) skewX(6deg); filter: hue-rotate(80deg); } 94% { transform: translateX(3px); } }
-
-/* 瞄準選單 */
-#aim { position: absolute; inset: 0; display: none; pointer-events: none; }
-.aiming #aim { display: block; }
-#aim button { position: absolute; pointer-events: auto; font-size: 20px; padding: 12px 22px; background: rgba(0, 0, 0, .75); }
-#aim-dealer { left: 50%; top: 250px; transform: translateX(-50%); }
-#aim-self { left: 50%; top: 640px; transform: translateX(-50%); }
-#aim-cancel { left: calc(50% + 120px); top: 645px; font-size: 15px !important; }
-#aim-dealer:hover, #aim-self:hover { background: var(--live); color: #fff; border-color: var(--live); }
-
-#click-text { position: absolute; left: 50%; top: 290px; transform: translateX(-50%); font-family: var(--f-pixel); font-size: 64px; color: var(--bone); opacity: 0; pointer-events: none; }
 #click-text.show { animation: clickTxt 1s; }
 @keyframes clickTxt { 0% { opacity: 1; transform: translateX(-50%) scale(1.3); } 100% { opacity: 0; transform: translateX(-50%) translateY(-30px); } }
-#item-label { position: absolute; left: 50%; top: 220px; transform: translateX(-50%); font-size: 30px; font-weight: 900; letter-spacing: .3em; opacity: 0; pointer-events: none; text-shadow: 0 0 20px #000; }
-#item-label.show { animation: itemLbl 1.3s; }
-@keyframes itemLbl { 15%, 70% { opacity: 1; } 100% { opacity: 0; } }
-
-#dialog {
-  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: 820px; min-height: 66px;
-  padding: 14px 24px; display: flex; align-items: center; gap: 16px;
-  background: rgba(4, 5, 5, .84); border: 1px solid rgba(228, 221, 198, .2);
-}
-#dialog-text { margin: 0; flex: 1; font-size: 23px; letter-spacing: .04em; line-height: 1.4; min-height: 1.4em; }
-#dialog-text::after { content: '▌'; margin-left: 2px; color: var(--crt); animation: blink 1s steps(2) infinite; }
-
-/* 對面角色的台詞：對話框上方、跟旁白分開 */
-#speech {
-  position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); max-width: 760px;
-  display: flex; align-items: baseline; gap: 12px; padding: 6px 18px; pointer-events: none; z-index: 52;
-  opacity: 0; transition: opacity .35s; text-shadow: 0 0 10px #000, 0 0 3px #000;
-}
+/* ---------- 字幕：白色像素字、黑色描邊，置中在畫面下方，沒有框 ---------- */
+#dialog, #speech { position: absolute; left: 50%; transform: translateX(-50%); width: 1100px; text-align: center; pointer-events: none; }
+#dialog { bottom: 40px; }
+#dialog-text { margin: 0; min-height: 1em; font-size: 36px; line-height: 1.2; color: #fff; text-shadow: var(--outline); }
+#speech { bottom: 92px; z-index: 52; opacity: 0; transition: opacity .35s; }
 #speech.on { opacity: 1; transition: opacity .12s; }
-#speech .who { font-size: 14px; letter-spacing: .3em; color: var(--live); white-space: nowrap; }
-#speech .txt { font-family: var(--f-serif); font-size: 26px; letter-spacing: .06em; color: #efe6cc; }
-#speech .txt::before { content: '「'; color: var(--dim); }
-#speech .txt::after { content: '」'; color: var(--dim); }
+#speech .txt { font-size: 36px; line-height: 1.2; color: #fff; text-shadow: var(--outline); }
+#aim-hint { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); margin: 0; font-size: 24px; color: rgba(255, 255, 255, .7); text-shadow: var(--outline); pointer-events: none; display: none; white-space: nowrap; }
+.aiming #aim-hint { display: block; }
+#steal-cancel { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); pointer-events: auto; }
 
 #peek { position: absolute; left: 50%; top: 150px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 10px; animation: peekIn .4s; pointer-events: none; }
-.peek-label { font-family: var(--f-pixel); font-size: 44px; padding: 0 14px; background: rgba(0, 0, 0, .7); }
+.peek-label { font-family: var(--f-pixel); font-size: 48px; text-shadow: var(--outline); }
 .peek-label.live { color: var(--live); }
 .peek-label.blank { color: var(--blank); }
 @keyframes peekIn { from { opacity: 0; transform: translateX(-50%) scale(.8); } }
-
-#banner { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 0, 0, .35); pointer-events: none; z-index: 5; }
-#banner.show { animation: banner 2.6s; }
-@keyframes banner { 0% { opacity: 0; } 15%, 80% { opacity: 1; } 100% { opacity: 0; } }
-.b-big { font-family: var(--f-pixel); font-size: 150px; line-height: .9; letter-spacing: .06em; text-shadow: 4px 0 rgba(208, 53, 42, .6), -4px 0 rgba(76, 127, 214, .5); }
-.b-sub { font-size: 20px; letter-spacing: .14em; color: var(--dim); }
 
 /* ---------- 特效層 ---------- */
 #fx-flash, #fx-red, #fx-black { position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 20; }
@@ -169,25 +114,13 @@ b.blank { color: var(--blank); }
 #scene.shake { animation: shake .5s; }
 @keyframes shake { 10% { transform: translate(-14px, 8px) rotate(-.6deg); } 25% { transform: translate(12px, -10px); } 45% { transform: translate(-8px, 6px); } 65% { transform: translate(5px, -3px); } 85% { transform: translate(-2px, 1px); } }
 
-#grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .045; mix-blend-mode: screen; pointer-events: none; z-index: 60; image-rendering: pixelated; }
-.crt {
-  position: absolute; inset: 0; pointer-events: none; z-index: 61;
-  background:
-    repeating-linear-gradient(to bottom, rgba(0, 0, 0, .08) 0 1px, transparent 1px 3px),
-    radial-gradient(ellipse 75% 70% at 50% 50%, transparent 55%, rgba(0, 0, 0, .7) 100%);
-}
-
 /* ---------- 覆蓋畫面 ---------- */
 .overlay { position: absolute; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; }
 .overlay[hidden] { display: none; }
 #title { background: radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, .25), rgba(0, 0, 0, .85) 75%); }
 .title-box { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.title-h { margin: 0; font-size: 144px; font-weight: 400; line-height: 1; letter-spacing: .08em; color: #fff; text-shadow: 4px 0 #000, -4px 0 #000, 0 4px #000, 0 -4px #000; }
 .eyebrow { margin: 0; font-family: var(--f-pixel); font-size: 26px; letter-spacing: .3em; color: var(--dim); }
-.glitch { position: relative; margin: 0; font-size: 150px; font-weight: 900; letter-spacing: .12em; line-height: 1; color: var(--bone); }
-.glitch::before, .glitch::after { content: attr(data-text); position: absolute; inset: 0; }
-.glitch::before { color: var(--live); transform: translateX(-4px); mix-blend-mode: screen; opacity: .6; animation: gl 3s infinite steps(1); }
-.glitch::after { color: var(--blank); transform: translateX(4px); mix-blend-mode: screen; opacity: .5; animation: gl 2.3s infinite steps(1) reverse; }
-@keyframes gl { 0%, 88%, 100% { clip-path: inset(0 0 0 0); } 90% { clip-path: inset(20% 0 55% 0); transform: translateX(-12px); } 93% { clip-path: inset(62% 0 8% 0); transform: translateX(10px); } }
 .tagline { margin: 0; font-size: 19px; line-height: 1.7; color: var(--dim); }
 #btn-start { margin-top: 10px; font-size: 22px; padding: 12px 40px; letter-spacing: .3em; }
 .credit { margin: 8px 0 0; font-size: 12px; color: #5f5d53; letter-spacing: .1em; }
@@ -272,7 +205,7 @@ b.blank { color: var(--blank); }
 #end.win .end-title { color: var(--bone); }
 .end-sub { margin: 0; font-size: 17px; color: var(--dim); }
 .end-cash { margin: 6px 0; font-size: 18px; letter-spacing: .2em; color: var(--dim); }
-.end-cash b { display: block; font-family: var(--f-pixel); font-weight: 400; font-size: 84px; letter-spacing: .04em; color: #9fe39a; text-shadow: 0 0 20px rgba(141, 255, 168, .4); font-variant-numeric: tabular-nums; }
+.end-cash b { display: block; font-family: var(--f-pixel); font-weight: 400; font-size: 84px; letter-spacing: .04em; color: #9fe39a; font-variant-numeric: tabular-nums; }
 .end-stats { width: 100%; margin: 6px 0 10px; display: grid; gap: 6px; }
 .end-stats div { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed rgba(228, 221, 198, .15); font-size: 16px; }
 .end-stats dt { color: var(--dim); }
@@ -280,9 +213,7 @@ b.blank { color: var(--blank); }
 #btn-again { font-size: 18px; padding: 10px 34px; }
 
 /* 道具提示與飛行道具（在縮放舞台之外） */
-#tip { position: fixed; z-index: 100; max-width: 240px; padding: 8px 12px; background: rgba(4, 5, 5, .94); border: 1px solid rgba(228, 221, 198, .3); font-family: var(--f-body); pointer-events: none; }
-#tip b { display: block; font-size: 15px; color: var(--bone); }
-#tip span { font-size: 13px; color: var(--dim); }
+#tip { position: fixed; z-index: 100; padding: 0; font-family: var(--f-pixel); font-size: 24px; color: #fff; text-shadow: var(--outline); pointer-events: none; white-space: nowrap; }
 .fly-item { position: fixed; z-index: 90; pointer-events: none; padding: 10px; filter: drop-shadow(0 20px 20px rgba(0, 0, 0, .8)); }
 .fly-item svg { width: 100%; height: 100%; }
 
@@ -353,7 +284,7 @@ b.blank { color: var(--blank); }
 @media (prefers-reduced-motion: reduce) { .ld-cyl, .ld-ch b { animation-duration: 9.6s; } }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-11-03 15:57" };</script>
+<script>window.BUILD = { target: "web", at: "2026-11-03 23:27" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -370,49 +301,17 @@ b.blank { color: var(--blank); }
   <div id="lids"><i class="lid top"></i><i class="lid bot"></i></div>
   <div id="stage" class="idle">
     <div id="scene">
-      <div id="info">
-        <div id="round-label">ROUND I</div>
-        <div id="turn">你的回合</div>
-        <p class="hint">點桌上的霰彈槍拿起來（空白鍵），點自己的道具使用（數字鍵 1–8）。</p>
-        <div class="intel">
-          <div class="intel-h">已知情報 <span id="shell-count"></span></div>
-          <ul id="intel-list"><li class="none">還沒有任何情報</li></ul>
-        </div>
-        <div class="tools">
-          <button id="btn-mute" type="button" aria-pressed="false">聲音：開</button>
-          <button id="btn-music" type="button" aria-pressed="false">音樂：開</button>
-          <button id="btn-help" type="button">規則與道具</button>
-          <button id="btn-settings" type="button">設定</button>
-        </div>
-      </div>
-
-      <div id="monitor" aria-live="polite">
-        <div class="screen">
-          <div class="mrow mhead"><span>ROUND</span><span id="m-round">I</span></div>
-          <div class="mrow" id="m-dealer"><span class="mname">DEALER</span><span class="mtag"></span><span class="bolts"></span></div>
-          <div class="mrow" id="m-player"><span class="mname">YOU</span><span class="mtag"></span><span class="bolts"></span></div>
-          <div class="mwarn">!! DEFIB WIRES CUT !!</div>
-        </div>
-        <div class="mlabel">DEFIBRILLATOR · 除顫器</div>
-      </div>
-
-      <div id="aim">
-        <button id="aim-dealer" type="button">▲ 射向莊家</button>
-        <button id="aim-self" type="button">▼ 射向自己</button>
-        <button id="aim-cancel" type="button">放下槍</button>
-      </div>
-
       <div id="click-text">*咔*</div>
-      <div id="item-label"></div>
 
-      <div id="speech" aria-live="polite"><b class="who"></b><span class="txt"></span></div>
+      <!-- 字幕：莊家的台詞在上、旁白在下，白色像素字加黑邊，逐字打出 -->
+      <div id="speech" aria-live="polite"><span class="txt"></span></div>
       <div id="dialog" aria-live="polite">
         <p id="dialog-text"></p>
-        <button id="steal-cancel" type="button" hidden>放棄偷取</button>
       </div>
+      <p id="aim-hint">移動滑鼠瞄準 · 點一下開槍 · 右鍵放下</p>
+      <button id="steal-cancel" type="button" hidden>放棄偷取</button>
 
       <div id="peek" hidden><div class="peek-label"></div></div>
-      <div id="banner" hidden><div class="b-big"></div><div class="b-sub"></div></div>
     </div>
 
     <div id="fx-red"></div>
@@ -423,7 +322,7 @@ b.blank { color: var(--blank); }
     <section id="title" class="overlay">
       <div class="title-box">
         <p class="eyebrow">12 GAUGE · 2 PLAYERS · 3 ROUNDS</p>
-        <h1 class="glitch" data-text="死亡輪盤">死亡輪盤</h1>
+        <h1 class="title-h">死亡輪盤</h1>
         <p class="tagline">兩個人，一把霰彈槍，一把實彈與空包彈。<br>你只知道數量，不知道順序。</p>
         <button id="btn-start" type="button">走進去</button>
         <button id="btn-settings2" type="button" class="link-btn">設定：畫質與角色外觀</button>
@@ -474,20 +373,34 @@ b.blank { color: var(--blank); }
       </div>
     </section>
 
+    <!-- 暫停選單：按 ESC（手機點右上角的小圖示）開關 -->
+    <button id="btn-menu" type="button" aria-label="選單">≡</button>
+    <section id="pause" class="overlay" hidden>
+      <div class="pause-box" role="dialog" aria-labelledby="pause-h">
+        <h2 id="pause-h">暫停</h2>
+        <p id="pause-info"></p>
+        <button id="btn-resume" type="button">繼續</button>
+        <button id="btn-mute" type="button" aria-pressed="false">聲音：開</button>
+        <button id="btn-music" type="button" aria-pressed="false">音樂：開</button>
+        <button id="btn-help" type="button">規則與道具</button>
+        <button id="btn-settings" type="button">設定</button>
+      </div>
+    </section>
+
     <section id="help" class="overlay" hidden>
       <div class="help-box" role="dialog" aria-labelledby="help-h">
         <h2 id="help-h">規則</h2>
         <ul class="rules">
           <li>每次裝填前會公布實彈與空包彈的數量，但順序是隨機的。</li>
-          <li>輪到你時，點霰彈槍拿起來，選擇射向莊家或射向自己。</li>
+          <li>輪到你時，點霰彈槍拿起來（空白鍵），移動滑鼠讓槍口指向莊家或自己，點一下開槍；右鍵或 ESC 放下。鍵盤：方向鍵上／下瞄準、空白鍵開槍。手機：點莊家的臉或畫面下方轉過槍口，同一邊再點一下開槍。</li>
           <li>射自己時如果是空包彈，你可以繼續行動。其他情況都換對方行動。</li>
           <li>實彈扣 1 點電量，鋸短槍管後扣 2 點。電量歸零就輸了這一局。</li>
           <li>每次裝填都會發道具（簡單：第一局 1 個；第二局 2 個、第三局 4 個），拿起槍之前都可以使用。</li>
-          <li>簡單模式：左上角顯示槍裡還剩幾發實彈、空包彈；第一、二局倒下時被電回來接著打，莊家受的傷不會恢復。</li>
+          <li>簡單模式：暫停選單（ESC）裡會顯示槍裡還剩幾發實彈、空包彈；第一、二局倒下時被電回來接著打，莊家受的傷不會恢復。</li>
           <li>困難模式（原版規則）：要自己記剩幾發，第一局沒有道具，倒下時這一局整個重來。</li>
           <li>雙人連線：對面坐的是另一位玩家，三局兩勝，開房的人每次裝填先手。</li>
           <li>第三局有人電量剩 2 點以下時，除顫器線路會被切斷，之後無法回血。</li>
-          <li>對話可以跳過：點一下畫面，或按空白鍵／Enter。動畫太慢可以在「設定」把演出速度調快。</li>
+          <li>對話可以跳過：點一下畫面，或按空白鍵／Enter。電量看桌上的除顫器。動畫太慢可以在「設定」把演出速度調快。道具：數字鍵 1–8。</li>
         </ul>
         <h2>道具</h2>
         <ul id="help-list"></ul>
@@ -539,8 +452,6 @@ b.blank { color: var(--blank); }
     </section>
 
   </div>
-  <canvas id="grain" width="160" height="100"></canvas>
-  <div class="crt"></div>
   <div id="tip" hidden></div>
 </div>
 <script>
@@ -3440,6 +3351,29 @@ const WK = (() => {
     return sum / (1 - Math.pow(0.5, o));
   }
 
+  // 快速的 2D 值雜訊（貼圖用；查表、不用 Math.sin）：noise2(x, y) 0～1，fbm2 疊 o 層
+  // 雜訊表用固定的種子（每次載入桌面的鏽斑都一樣，比對畫面時才不會每次不同；不動遊戲用的亂數）
+  const NG = 256, ngrid = new Float32Array(NG * NG);
+  let seed = 0x5eed1234;
+  for (let i = 0; i < ngrid.length; i++) {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    ngrid[i] = ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  function noise2(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const x0 = xi & (NG - 1), y0 = yi & (NG - 1), x1 = (x0 + 1) & (NG - 1), y1 = (y0 + 1) & (NG - 1);
+    const a = ngrid[y0 * NG + x0], b = ngrid[y0 * NG + x1], c = ngrid[y1 * NG + x0], d = ngrid[y1 * NG + x1];
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  }
+  function fbm2(x, y, o = 3) {
+    let a = 0.5, f = 1, sum = 0, norm = 0;
+    for (let i = 0; i < o; i++) { sum += a * noise2(x * f + i * 17.3, y * f - i * 9.1); norm += a; f *= 2.07; a *= 0.5; }
+    return sum / norm;
+  }
+
   // ---------- 程序貼圖 ----------
   function canvasTex(w, h, draw, rep, srgb = true) {
     const c = document.createElement('canvas');
@@ -3448,7 +3382,9 @@ const WK = (() => {
     draw(g, w, h);
     const t = new T.CanvasTexture(c);
     if (srgb) t.encoding = T.sRGBEncoding;
-    t.anisotropy = 8;
+    // 跟原版一樣不做 mipmap 模糊：最近點取樣，貼圖的細節直接變成畫面上的像素
+    t.magFilter = t.minFilter = T.NearestFilter;
+    t.generateMipmaps = false;
     if (rep) { t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep[0], rep[1]); }
     return t;
   }
@@ -3479,7 +3415,7 @@ const WK = (() => {
   return {
     T, V, UP, PI, scene, camera, env, D,
     tasks, ease, anim, wait, every,
-    R, sstep, sm, bump, eq, poseMat, quatFromBasis, hash, vnoise, fbm,
+    R, sstep, sm, bump, eq, poseMat, quatFromBasis, hash, vnoise, fbm, noise2, fbm2,
     canvasTex, grain, blot, std, mesh,
   };
 })();
@@ -3488,7 +3424,15 @@ const WK = (() => {
 <script>
 // 程序貼圖（牆、地板、桌布、皮膚、頭髮、除顫器螢幕、電閘面板）與共用材質
 (() => {
-  const { PI, R, canvasTex, grain, blot, std, env } = WK;
+  const { PI, R, canvasTex, grain, blot, std, env, noise2, fbm2 } = WK;
+  // 桌面的大小（長邊從玩家延伸到莊家）、道具格、子彈框：room.js、scene.js 也用這些
+  // x：毛氈半寬；z0：莊家那端；z1：玩家那端；slotX：靠中間那欄道具的中心；cw、cd：道具格的寬、深（深度兩邊不同：玩家那邊離鏡頭近、做淺一點才整排都看得到）；
+  // rows：雙方兩排道具的 z（玩家那邊是正的）；shellBox：子彈框（8 格，跨在中線上）
+  WK.TABLE = {
+    x: 0.86, z0: -0.84, z1: 0.98, slotX: 0.27, cw: 0.22, cd: { player: 0.16, dealer: 0.2 },
+    rows: { player: [0.17, 0.33], dealer: [-0.3, -0.5] },
+    shellBox: { x0: 0.12, z0: -0.05, z1: 0.05, cell: 0.045 },
+  };
 
   const tex = {};
   function makeTextures() {
@@ -3498,7 +3442,7 @@ const WK = (() => {
       const bw = 64, bh = 24;
       for (let r = 0; r * bh < h; r++) for (let c = -1; c * bw < w; c++) {
         const x = c * bw + (r % 2 ? bw / 2 : 0), y = r * bh;
-        g.fillStyle = `hsl(${R(4, 16)}, ${R(28, 42)}%, ${R(14, 24)}%)`;
+        g.fillStyle = `hsl(${R(2, 14)}, ${R(18, 30)}%, ${R(16, 26)}%)`;
         g.fillRect(x + 2, y + 2, bw - 4, bh - 4);
         if (Math.random() < 0.3) { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x + 2 + R(0, bw / 2), y + 2, R(8, 24), bh - 4); }
       }
@@ -3517,56 +3461,109 @@ const WK = (() => {
       grain(g, w, h, 44);
     }, [3, 3]);
 
-    // 桌面：照原版，舊舊的橄欖綠布、一大片一大片磨掉露出的褐紅色，上面用白漆畫球場一樣的線：
-    // 中線、外框、兩邊的半圓、雙方左右各一個 2×2 的道具格（對齊 room.js 的 slotPos）、中間 8 格的子彈框（對齊 showShells）
-    // 畫布座標 = 桌面上的 (x, z)：x -1.15～1.15 對到 0～w、z -0.825（莊家那邊）～0.825 對到 0～h
-    tex.table = canvasTex(1536, 1102, (g, w, h) => {
-      const X = x => (x + 1.15) / 2.3 * w, Z = z => (z + 0.825) / 1.65 * h, S = m => m / 2.3 * w;
-      g.fillStyle = '#56603a'; g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 320; i++) blot(g, R(0, w), R(0, h), R(20, 130), Math.random() < 0.62 ? 'rgba(96,38,34,.5)' : 'rgba(120,130,80,.2)');
-      for (let i = 0; i < 900; i++) { g.fillStyle = Math.random() < 0.6 ? 'rgba(88,36,30,.5)' : 'rgba(40,30,18,.35)'; g.fillRect(R(0, w), R(0, h), R(2, 9), R(2, 7)); }
-      for (let i = 0; i < 12000; i++) { g.fillStyle = `rgba(${R(0, 255) | 0},${R(0, 200) | 0},${R(0, 160) | 0},.05)`; g.fillRect(R(0, w), R(0, h), 2, 2); }
-      // 白漆線
-      g.strokeStyle = 'rgba(222,212,180,.92)'; g.lineWidth = S(0.012); g.lineCap = 'square';
-      const line = (x0, z0, x1, z1) => { g.beginPath(); g.moveTo(X(x0), Z(z0)); g.lineTo(X(x1), Z(z1)); g.stroke(); };
-      const rect = (x0, z0, x1, z1) => g.strokeRect(X(x0), Z(z0), X(x1) - X(x0), Z(z1) - Z(z0));
-      const EX = 1.08, EZ = 0.76;
-      rect(-EX, -EZ, EX, EZ);
+    // 桌面：照原版，灰綠／橄欖綠的舊毛氈，上面一大塊一大塊不規則的紅褐色鏽斑與污漬（好幾層雜訊疊出來），
+    // 再用米白的漆畫線（有磨損、斷斷續續）：外框、中線、兩側的半圓、兩端籃球場一樣的弧線、
+    // 雙方左右各一個 2×2 道具格（對齊 room.js 的 slotPos）、右側中段 8 格的子彈框（對齊 scene.js 的 SHELL_BOX）
+    // 畫布座標 = 桌面上的 (x, z)：x -TABLE.x～TABLE.x 對到 0～w、z TABLE.z0（莊家那端）～TABLE.z1（玩家那端）對到 0～h
+    const TB = WK.TABLE;
+    tex.table = canvasTex(1024, Math.round(1024 * (TB.z1 - TB.z0) / (2 * TB.x)), (g, w, h) => {
+      const X = x => (x + TB.x) / (2 * TB.x) * w, Z = z => (z - TB.z0) / (TB.z1 - TB.z0) * h, S = m => m / (2 * TB.x) * w;
+      // 毛氈與鏽：逐像素
+      const img = g.createImageData(w, h), d = img.data, sc = 1 / S(1);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const mx = x * sc, mz = y * sc;
+        // 布的明暗（大片）、布紋（細的橫豎紋）
+        const base = 0.86 + 0.28 * (fbm2(mx * 2.2, mz * 2.2, 3) - 0.5) + 0.05 * (noise2(x * 0.5, y * 0.07) - 0.5);
+        let r = 70 * base, gg = 84 * base, b = 58 * base;
+        // 鏽斑：低頻雜訊過門檻，邊緣用高頻雜訊打碎；裡面再分深淺
+        const st = fbm2(mx * 3.1 + 40, mz * 3.1, 4) + 0.22 * (noise2(mx * 26, mz * 26) - 0.5);
+        const k = Math.min(1, Math.max(0, (st - 0.52) / 0.07));
+        if (k > 0) {
+          const deep = fbm2(mx * 9 + 7, mz * 9, 2);
+          const rr = 70 - 24 * deep, rg = 44 - 14 * deep, rb = 40 - 12 * deep;
+          r += (rr - r) * k; gg += (rg - gg) * k; b += (rb - b) * k;
+        }
+        // 小污點、黑色的油漬
+        const sp = noise2(mx * 55, mz * 55);
+        if (sp > 0.86) { const f = (sp - 0.86) * 4; r *= 1 - f * 0.5; gg *= 1 - f * 0.6; b *= 1 - f * 0.6; }
+        const oil = fbm2(mx * 1.6 - 30, mz * 1.6 + 11, 3);
+        if (oil < 0.3) { const f = (0.3 - oil) * 2.2; r *= 1 - f; gg *= 1 - f; b *= 1 - f; }
+        const i = (y * w + x) * 4;
+        d[i] = r; d[i + 1] = gg; d[i + 2] = b; d[i + 3] = 255;
+      }
+      g.putImageData(img, 0, 0);
+      // 白漆線：先畫在另一張畫布，用雜訊挖出磨損的缺口，再蓋回桌面
+      const lc = document.createElement('canvas'); lc.width = w; lc.height = h;
+      const l = lc.getContext('2d');
+      l.strokeStyle = '#ddd0b0'; l.lineWidth = S(0.011); l.lineCap = 'square';
+      const line = (x0, z0, x1, z1) => { l.beginPath(); l.moveTo(X(x0), Z(z0)); l.lineTo(X(x1), Z(z1)); l.stroke(); };
+      const rect = (x0, z0, x1, z1) => l.strokeRect(X(x0), Z(z0), X(x1) - X(x0), Z(z1) - Z(z0));
+      const EX = TB.x - 0.08, EZ0 = TB.z0 + 0.07, EZ1 = TB.z1 - 0.07;
+      rect(-EX, EZ0, EX, EZ1);
       line(-EX, 0, EX, 0);
-      for (const sx of [-1, 1]) { g.beginPath(); g.arc(X(sx * EX), Z(0), S(0.24), sx < 0 ? -PI / 2 : PI / 2, sx < 0 ? PI / 2 : PI * 1.5); g.stroke(); }
-      // 道具格：每一側左右兩個 2×2，格子 0.17 見方，中心在 slotPos；外側的線一路畫到外框
-      for (const sz of [-1, 1]) for (const sx of [-1, 1]) {
-        const za = sz > 0 ? 0.235 : -0.255, zb = za + sz * 0.34, zm = za + sz * 0.17;
-        const xa = sx * 0.375, xb = sx * 0.715, xm = sx * 0.545;
+      // 中線兩端的半圓（籃球場的罰球圈那樣貼著外框）
+      for (const sx of [-1, 1]) { l.beginPath(); l.arc(X(sx * EX), Z(0), S(0.14), sx < 0 ? -PI / 2 : PI / 2, sx < 0 ? PI / 2 : PI * 1.5); l.stroke(); }
+      // 道具格：每一側左右兩個 2×2，格子 cw×cd，中心在 slotPos；外側的線一路畫到外框
+      for (const side of ['player', 'dealer']) for (const sx of [-1, 1]) {
+        const [r0, r1] = TB.rows[side], sz = Math.sign(r0);
+        const za = r0 - sz * TB.cd[side] / 2, zb = r1 + sz * TB.cd[side] / 2, zm = (r0 + r1) / 2;
+        const xa = sx * (TB.slotX - TB.cw / 2), xb = sx * (TB.slotX + 1.5 * TB.cw), xm = sx * (TB.slotX + TB.cw / 2);
         rect(Math.min(xa, xb), Math.min(za, zb), Math.max(xa, xb), Math.max(za, zb));
         line(xm, za, xm, zb); line(xa, zm, xb, zm);
-        line(xa, zb, xa, sz * EZ); line(xb, zb, xb, sz * EZ);
+        line(xa, zb, xa, sz > 0 ? EZ1 : EZ0); line(xb, zb, xb, sz > 0 ? EZ1 : EZ0);
       }
-      // 兩頭中間的小框（槍、雙手放的地方）
-      for (const sz of [-1, 1]) rect(-0.17, sz > 0 ? EZ - 0.13 : -EZ, 0.17, sz > 0 ? EZ : -EZ + 0.13);
-      // 子彈框：8 格，每格 0.065 寬
-      g.lineWidth = S(0.009);
-      rect(-0.26, 0.115, 0.26, 0.225);
-      for (let i = 1; i < 8; i++) line(-0.26 + i * 0.065, 0.115, -0.26 + i * 0.065, 0.225);
-      // 漆被磨掉：線上一塊塊缺口（用布的顏色蓋回去）
-      for (let i = 0; i < 1400; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(86,96,58,.75)' : 'rgba(92,40,34,.6)'; g.fillRect(R(0, w), R(0, h), R(2, 7), R(2, 6)); }
-      const v = g.createRadialGradient(w / 2, h / 2, h * .3, w / 2, h / 2, w * .72);
-      v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.4)');
+      // 兩端中間的小框（槍、雙手放的地方）與框外的弧線
+      for (const sz of [-1, 1]) {
+        const ze = sz > 0 ? EZ1 : EZ0, zi = ze - sz * 0.14;
+        rect(-0.16, Math.min(ze, zi), 0.16, Math.max(ze, zi));
+        l.beginPath(); l.arc(X(0), Z(ze), S(0.3), sz > 0 ? PI : 0, sz > 0 ? 2 * PI : PI); l.stroke();
+      }
+      // 子彈框：8 格
+      const SB = TB.shellBox;
+      l.lineWidth = S(0.008);
+      rect(SB.x0, SB.z0, SB.x0 + 8 * SB.cell, SB.z1);
+      for (let i = 1; i < 8; i++) line(SB.x0 + i * SB.cell, SB.z0, SB.x0 + i * SB.cell, SB.z1);
+      // 磨損：沿線挖掉一段段、一點點
+      l.globalCompositeOperation = 'destination-out';
+      const ld = l.getImageData(0, 0, w, h), q = ld.data;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4 + 3;
+        if (!q[i]) continue;
+        const wear = fbm2(x * sc * 14, y * sc * 14, 2) + 0.35 * (noise2(x * 0.45, y * 0.45) - 0.5);
+        q[i] = wear < 0.33 ? 0 : wear < 0.4 ? q[i] * 0.45 : q[i] * 0.95;
+      }
+      l.putImageData(ld, 0, 0);
+      g.drawImage(lc, 0, 0);
+      // 桌邊一圈比較暗（手摸、灰塵）
+      const v = g.createRadialGradient(w / 2, h / 2, h * 0.32, w / 2, h / 2, h * 0.62);
+      v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(10,6,4,.35)');
       g.fillStyle = v; g.fillRect(0, 0, w, h);
-      grain(g, w, h, 18);
     });
 
-    tex.wood = canvasTex(256, 64, (g, w, h) => {
-      g.fillStyle = '#5c3418'; g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 46; i++) {
-        g.strokeStyle = `rgba(${R(15, 45) | 0},${R(8, 18) | 0},0,${R(.2, .5)})`;
-        g.lineWidth = R(.5, 2);
+    // 木頭（槍托、護木、桌框）：紅褐色、清楚的木紋與一兩個木節，邊緣被手摸得比較深
+    tex.wood = canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = '#6a3a1e'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 70; i++) {
+        g.strokeStyle = `rgba(${R(20, 50) | 0},${R(8, 20) | 0},0,${R(.25, .6)})`;
+        g.lineWidth = R(1, 3);
         g.beginPath();
         const y0 = R(0, h);
-        for (let x = 0; x <= w; x += 8) g.lineTo(x, y0 + Math.sin(x * .03 + i) * 3);
+        for (let x = 0; x <= w; x += 8) g.lineTo(x, y0 + Math.sin(x * .025 + i) * 4);
         g.stroke();
       }
-      grain(g, w, h, 20);
+      for (let k = 0; k < 2; k++) { const cx = R(30, w - 30), cy = R(30, h - 30); for (let r = 4; r < 22; r += 4) { g.strokeStyle = 'rgba(30,12,4,.5)'; g.lineWidth = 2; g.beginPath(); g.ellipse(cx, cy, r * 1.8, r * 0.7, 0, 0, PI * 2); g.stroke(); } }
+      for (let i = 0; i < 16; i++) blot(g, R(0, w), R(0, h), R(10, 40), 'rgba(20,8,2,.3)');
+      g.strokeStyle = 'rgba(220,190,150,.25)'; g.lineWidth = 1;
+      for (let i = 0; i < 25; i++) { const x = R(0, w), y = R(0, h); g.beginPath(); g.moveTo(x, y); g.lineTo(x + R(-14, 14), y + R(-3, 3)); g.stroke(); }
+    }, [1, 1]);
+
+    // 槍的金屬：發藍的黑鐵，邊緣磨亮、刮痕、一點點鏽
+    tex.gunMetal = canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = '#4a4c52'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 40; i++) blot(g, R(0, w), R(0, h), R(6, 40), i % 3 ? 'rgba(15,15,20,.35)' : 'rgba(150,150,150,.18)');
+      for (let i = 0; i < 12; i++) blot(g, R(0, w), R(0, h), R(3, 14), 'rgba(120,60,30,.35)');
+      g.lineWidth = 1;
+      for (let i = 0; i < 90; i++) { g.strokeStyle = `rgba(210,210,205,${R(.1, .4)})`; const x = R(0, w), y = R(0, h); g.beginPath(); g.moveTo(x, y); g.lineTo(x + R(-30, 30), y + R(-4, 4)); g.stroke(); }
     });
 
     tex.skin = canvasTex(512, 512, (g, w, h) => {
@@ -3661,7 +3658,7 @@ const WK = (() => {
   function makeMaterials() {
     M.metal = std(0x3a3e42, { metalness: 0.85, roughness: 0.32, envMap: env.tex, envMapIntensity: 1.3 });
     M.metalDark = std(0x16181a, { metalness: 0.7, roughness: 0.45, envMap: env.tex, envMapIntensity: 1 });
-    M.wood = std(0xffffff, { map: tex.wood, roughness: 0.5, envMap: env.tex, envMapIntensity: 0.5 });
+    M.wood = std(0xa07a6a, { map: tex.wood, roughness: 0.5, envMap: env.tex, envMapIntensity: 0.5 });
     M.rubber = std(0x0b0b0b, { roughness: 0.95 });
     M.brass = std(0xb08838, { metalness: 0.9, roughness: 0.3, envMap: env.tex, envMapIntensity: 1.2 });
     M.skinHead = std(0xffffff, { map: tex.skin, bumpMap: tex.bump, bumpScale: 0.0025, roughness: 0.55, vertexColors: true });
@@ -3670,7 +3667,7 @@ const WK = (() => {
     M.shirt = std(0x1c1a16, { roughness: 0.9 });
     M.teeth = std(0xd6cca8, { roughness: 0.35 });
     M.table = std(0xffffff, { map: tex.table, roughness: 0.85 });
-    M.rim = std(0x2a180c, { map: tex.wood, roughness: 0.6, color: 0x6a5040 });
+    M.rim = std(0xffffff, { map: tex.wood, roughness: 0.65, color: 0x8a6458 });
     M.wall = std(0xffffff, { map: tex.wall, roughness: 0.8 });
     M.floor = std(0xffffff, { map: tex.floor, roughness: 0.9 });
     M.ceil = std(0x0d0e0d, { roughness: 1 });
@@ -3694,7 +3691,7 @@ const WK = (() => {
   // 機殼：深褐色的舊鐵，一片片橘紅的鏽、刮痕、往下流的鏽水
   function paintTex() {
     return canvasTex(512, 512, (g, w, h) => {
-      g.fillStyle = '#4a342a'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#6a554c'; g.fillRect(0, 0, w, h);
       for (let i = 0; i < 240; i++) blot(g, R(0, w), R(0, h), R(10, 70), ['rgba(120,58,30,.3)', 'rgba(25,16,12,.35)', 'rgba(150,110,85,.14)'][i % 3]);
       // 鏽：一叢叢不規則的小塊
       for (let i = 0; i < 40; i++) {
@@ -3737,56 +3734,59 @@ const WK = (() => {
   }
 
   // ---------- 螢幕 ----------
-  // 長寬比跟螢幕網格一樣（0.24 × 0.075）
-  const SCR_W = 640, SCR_H = 200;
-  const INK = '#d9f0c6';
-  const FONT = px => `${px}px VT323, "Noto Sans TC", "Microsoft JhengHei", monospace`;
-  function bolt(g, x, y, s) {
-    g.beginPath();
-    g.moveTo(x + 0.55 * s, y); g.lineTo(x + 0.12 * s, y + 0.56 * s); g.lineTo(x + 0.42 * s, y + 0.56 * s);
-    g.lineTo(x + 0.28 * s, y + s); g.lineTo(x + 0.86 * s, y + 0.38 * s); g.lineTo(x + 0.55 * s, y + 0.38 * s);
-    g.lineTo(x + 0.72 * s, y); g.closePath(); g.fill();
+  // 照原版截圖：黑底、淡薄荷綠的像素字與線。畫布本身就是像素格（320×128、最近點取樣），
+  // 字用 Cubic 11（12px 的倍數才對齊格子），畫完把半透明的邊緣壓成全有或全無，才不會有反鋸齒；
+  // 之後跟場景一起被後製抖色與量化。長寬比跟螢幕網格一樣（SW × SH）
+  const SCR_W = 320, SCR_H = 128;
+  const INK = '#b4ffa4';
+  const FONT = px => `${px}px Cubic11, "Microsoft JhengHei", monospace`;
+  // 像素閃電（7×11 格，每格 u 個像素）
+  const BOLT = ['....###', '...###.', '..###..', '.###...', '#######', '#######', '...###.', '..###..', '.###...', '.##....', '##.....'];
+  function bolt(g, x, y, u) {
+    BOLT.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') g.fillRect(x + i * u, y + j * u, u, u); });
   }
-  const blank = g => { g.fillStyle = '#030403'; g.fillRect(0, 0, SCR_W, SCR_H); };
+  const blank = g => { g.fillStyle = '#000'; g.fillRect(0, 0, SCR_W, SCR_H); };
+  // 字的邊緣：亮的留下、暗的去掉（畫布的字一定有反鋸齒）
+  function crisp(g) {
+    const img = g.getImageData(0, 0, SCR_W, SCR_H), d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const on = d[i + 1] > 128;
+      d[i] = on ? 0xb4 : 0; d[i + 1] = on ? 0xff : 0; d[i + 2] = on ? 0xa4 : 0;
+    }
+    g.putImageData(img, 0, 0);
+  }
   function drawScreen(g, st) {
     const w = SCR_W, h = SCR_H;
     blank(g);
-    g.save();
-    g.strokeStyle = INK; g.fillStyle = INK; g.shadowColor = INK; g.shadowBlur = 4;
-    g.lineWidth = 5; g.lineCap = 'butt';
-    const LY = 62, DX = w * 0.45;
+    g.fillStyle = INK;
+    const LY = 44, DX = Math.round(w * 0.4), line = (x, y, lw, lh) => g.fillRect(x, y, lw, lh);
     if (!st) {
-      // 待機：一條心電圖
-      g.globalAlpha = 0.8; g.lineWidth = 4; g.beginPath(); g.moveTo(20, 120);
-      for (let x = 20; x < w - 60; x += 120) { g.lineTo(x + 46, 120); g.lineTo(x + 58, 56); g.lineTo(x + 70, 176); g.lineTo(x + 82, 120); }
-      g.lineTo(w - 20, 120); g.stroke();
-    } else {
-      // 原版的分隔線：名字下面一條橫線、上面兩根短豎線、下面一根長豎線把兩邊分開
-      g.beginPath();
-      g.moveTo(18, LY); g.lineTo(w - 18, LY);
-      for (const x of [w * 0.37, w * 0.47]) { g.moveTo(x, 14); g.lineTo(x, LY); }
-      g.moveTo(DX, LY); g.lineTo(DX, h - 12);
-      g.stroke();
-      g.font = FONT(50); g.textBaseline = 'alphabetic';
-      g.textAlign = 'left'; g.fillText(String(st.dealerName).slice(0, 8), 22, LY - 10);
-      g.textAlign = 'right'; g.fillText(String(st.playerName).slice(0, 8), w - 22, LY - 10);
-      // 閃電：莊家的靠左上、玩家的靠右下（跟原版一樣），太多就縮小
-      const n = st.max, gap = 8;
-      const fit = room => Math.min(58, (room - (n - 1) * gap) / n);
-      const sL = fit(DX - 40), sR = fit(w - DX - 40);
-      for (let i = 0; i < n; i++) {
-        g.globalAlpha = i < st.dealer ? 1 : 0.1;
-        bolt(g, 22 + i * (sL + gap), LY + 14, sL);
-        g.globalAlpha = i < st.player ? 1 : 0.1;
-        bolt(g, w - 22 - (n - i) * (sR + gap) + gap, h - 16 - sR, sR);
+      // 待機：一條心電圖（像素階梯）
+      let y = 70;
+      for (let x = 12; x < w - 12; x += 2) {
+        const ph = (x - 12) % 100, ny = ph > 40 && ph < 46 ? 30 : ph >= 46 && ph < 52 ? 104 : 70;
+        line(x, Math.min(y, ny), 2, Math.abs(ny - y) + 2); y = ny;
       }
+    } else {
+      // 名字下面一條橫線貫穿螢幕；橫線上面幾根短豎線＝第幾局；中間一根豎線往下把兩欄分開
+      line(6, LY, w - 12, 3);
+      const r = Math.max(1, Math.min(3, st.round || 1));
+      for (let k = 0; k < r; k++) line(Math.round(w * 0.34) + k * 18, LY - 18, 3, 18);
+      line(DX, LY, 3, h - LY - 26);
+      g.font = FONT(24); g.textBaseline = 'alphabetic';
+      g.textAlign = 'left'; g.fillText(String(st.dealerName).slice(0, 4), 10, LY - 8);
+      g.textAlign = 'right'; g.fillText(String(st.playerName).slice(0, 6), w - 10, LY - 8);
+      // 閃電：莊家的在左欄上面、玩家的在右欄下面靠右（跟原版一樣）；被扣掉的就不畫（drain 讓它閃幾下再消失）
+      const n = st.max, u = n > 5 ? 2 : n > 4 ? 3 : 4, bw = 7 * u + 3;
+      for (let i = 0; i < Math.min(n, st.dealer); i++) bolt(g, 10 + i * bw, LY + 8, u);
+      for (let i = 0; i < Math.min(n, st.player); i++) bolt(g, w - 10 - (st.player - i) * bw + 4, h - 10 - 11 * u, u);
       if (st.cuffed && (st.cuffed.dealer || st.cuffed.player)) {
-        g.globalAlpha = 0.9; g.font = FONT(30); g.textAlign = 'left';
-        if (st.cuffed.dealer) g.fillText('[銬住]', 22, h - 16);
-        if (st.cuffed.player) g.fillText('[銬住]', DX + 18, LY + 40);
+        g.font = FONT(12); g.textAlign = 'left';
+        if (st.cuffed.dealer) g.fillText('[銬住]', 10, h - 10);
+        if (st.cuffed.player) g.fillText('[銬住]', DX + 10, LY + 22);
       }
     }
-    g.restore();
+    crisp(g);
   }
   let liveTex = null, liveG = null, lastKey = '', lastSt = null;
   function drawDefib(st) {
@@ -3796,38 +3796,24 @@ const WK = (() => {
     drawScreen(liveG, st);
     liveTex.needsUpdate = true;
   }
-  // 網頁字型（VT323）晚一點才載入完：載入後重畫一次
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (liveG) { lastKey = ''; drawDefib(lastSt); } });
-  // 斷電：紅字 NO POWER；閃雜訊用的雪花
+  // 像素字型晚一點才載入完：載入後重畫一次
+  if (document.fonts && document.fonts.load) document.fonts.load('24px Cubic11').then(() => { if (liveG) { lastKey = ''; drawDefib(lastSt); } }, () => {});
+  // 斷電：像素字 NO POWER；閃雜訊用的雪花（粗格子）
   let deadTex = null, staticTex = null;
   function makeOther() {
     deadTex = canvasTex(SCR_W, SCR_H, g => {
       blank(g);
-      g.fillStyle = '#ff5a40'; g.shadowColor = '#ff4030'; g.shadowBlur = 6; g.textAlign = 'center';
-      g.font = FONT(64); g.fillText('NO POWER', SCR_W / 2, 100);
-      g.font = FONT(36); g.fillText('-- LINE CUT --', SCR_W / 2, 156);
+      g.fillStyle = INK; g.textAlign = 'center';
+      g.font = FONT(24); g.fillText('NO POWER', SCR_W / 2, 62);
+      g.font = FONT(12); g.fillText('-- LINE CUT --', SCR_W / 2, 92);
+      crisp(g);
     });
     staticTex = canvasTex(SCR_W / 4, SCR_H / 4, (g, w, h) => {
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = Math.random() * 190 | 0; g.fillStyle = `rgb(${v * 0.85 | 0},${v},${v * 0.8 | 0})`; g.fillRect(x, y, 1, 1); }
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = Math.random() < 0.45 ? 0 : Math.random() * 230 | 0; g.fillStyle = `rgb(${v * 0.85 | 0},${v},${v * 0.82 | 0})`; g.fillRect(x, y, 1, 1); }
     });
-    staticTex.magFilter = T.NearestFilter;
   }
 
   // ---------- 幾何小工具 ----------
-  // 有直紋（滾花）的圓柱：半徑隨角度起伏
-  function ribbedCylinder(r, hgt, ribs = 14, depth = 0.12) {
-    const geo = new T.CylinderGeometry(r, r, hgt, ribs * 4, 1);
-    const p = geo.attributes.position, v = V();
-    for (let i = 0; i < p.count; i++) {
-      v.fromBufferAttribute(p, i);
-      const rr = Math.hypot(v.x, v.z);
-      if (rr < 1e-6) continue;
-      const a = Math.atan2(v.z, v.x), k = 1 - depth * (0.5 - 0.5 * Math.cos(a * ribs));
-      p.setXYZ(i, v.x * k, v.y, v.z * k);
-    }
-    geo.computeVertexNormals();
-    return geo;
-  }
   // 側面輪廓（z, y）沿 x 擠出成機殼，邊角倒圓
   function housingGeometry(width, prof) {
     const s = new T.Shape(prof.map(([z, y]) => new T.Vector2(z, y)));
@@ -3857,13 +3843,13 @@ const WK = (() => {
     const g = new T.Group();
     const W = 0.3, D = 0.2;
     // 側面輪廓：前面一整片微微往後仰的大螢幕面板，頂面平的
-    const FZ = D / 2, BZ = -D / 2, Y0 = 0.014, Y1 = 0.112, SZ = 0.072;
+    const FZ = D / 2, BZ = -D / 2, Y0 = 0.024, Y1 = 0.15, SZ = 0.078;
     const prof = [[BZ, 0], [FZ, 0], [FZ, Y0], [SZ, Y1], [BZ, Y1]];
     const shell = mesh(housingGeometry(W, prof), paint);
     g.add(shell);
-    // 底座：往前多凸出一點的厚鐵板
-    const foot = mesh(new T.BoxGeometry(W + 0.016, 0.012, D + 0.03), paint);
-    foot.position.set(0, 0.006, 0.01); g.add(foot);
+    // 底座：比機身稍寬、稍厚的鐵板，往前多凸出一點
+    const foot = mesh(new T.BoxGeometry(W + 0.03, 0.022, D + 0.04), paint);
+    foot.position.set(0, 0.011, 0.012); g.add(foot);
 
     // ---------- 前面的大螢幕 ----------
     const slope = Math.atan2(Y1 - Y0, FZ - SZ); // 面板跟水平的夾角
@@ -3873,16 +3859,27 @@ const WK = (() => {
     // 機殼倒角往外凸 6 公釐：面板往外推出來，不然螢幕埋在殼裡
     face.translateZ(0.0062);
     g.add(face);
-    const SW = 0.24, SH = 0.075;
-    // 螢幕四周凸起的鐵框（跟機殼同一種舊鐵）
-    const fw = 0.011, fd = 0.009;
-    for (const [w, h, x, y] of [[SW + fw * 2, fw, 0, (SH + fw) / 2], [SW + fw * 2, fw, 0, -(SH + fw) / 2], [fw, SH, (SW + fw) / 2, 0], [fw, SH, -(SW + fw) / 2, 0]]) {
-      const b = mesh(new T.BoxGeometry(w, h, fd), paint);
-      b.position.set(x, y, fd / 2 - 0.002); face.add(b);
+    const SW = 0.25, SH = 0.1;
+    // 螢幕四周凸起、有倒角的鐵框（跟機殼同一種舊鐵）
+    const fw = 0.012, fd = 0.012;
+    {
+      const ow = SW / 2 + fw, oh = SH / 2 + fw, r = 0.008;
+      const fr = new T.Shape();
+      fr.moveTo(-ow + r, -oh); fr.lineTo(ow - r, -oh); fr.quadraticCurveTo(ow, -oh, ow, -oh + r); fr.lineTo(ow, oh - r); fr.quadraticCurveTo(ow, oh, ow - r, oh);
+      fr.lineTo(-ow + r, oh); fr.quadraticCurveTo(-ow, oh, -ow, oh - r); fr.lineTo(-ow, -oh + r); fr.quadraticCurveTo(-ow, -oh, -ow + r, -oh);
+      const hole = new T.Path();
+      hole.moveTo(-SW / 2, -SH / 2); hole.lineTo(-SW / 2, SH / 2); hole.lineTo(SW / 2, SH / 2); hole.lineTo(SW / 2, -SH / 2); hole.closePath();
+      fr.holes.push(hole);
+      const fgeo = new T.ExtrudeGeometry(fr, { depth: fd - 0.004, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 2, curveSegments: 4 });
+      const uvp = fgeo.attributes.position, uv = fgeo.attributes.uv;
+      for (let i = 0; i < uvp.count; i++) uv.setXY(i, uvp.getX(i) * 3 + 0.5, uvp.getY(i) * 3 + 0.5);
+      const frame = mesh(fgeo, paint);
+      frame.position.z = -0.003; face.add(frame);
     }
     const c = document.createElement('canvas'); c.width = SCR_W; c.height = SCR_H;
     liveG = c.getContext('2d');
-    liveTex = new T.CanvasTexture(c); liveTex.encoding = T.sRGBEncoding; liveTex.anisotropy = 8;
+    liveTex = new T.CanvasTexture(c); liveTex.encoding = T.sRGBEncoding;
+    liveTex.magFilter = liveTex.minFilter = T.NearestFilter; liveTex.generateMipmaps = false;
     lastKey = '';
     drawDefib(null);
     makeOther();
@@ -3892,19 +3889,20 @@ const WK = (() => {
     const glass = new T.Mesh(new T.PlaneGeometry(SW, SH), new T.MeshStandardMaterial({ color: 0x111511, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.16, envMap: env.tex, envMapIntensity: 1.3 }));
     glass.position.set(0, 0, 0.0012); face.add(glass);
 
-    // ---------- 螺絲、散熱孔 ----------
+    // ---------- 螺絲 ----------
     const screwGeo = new T.CylinderGeometry(0.0042, 0.0042, 0.003, 10);
     const screw = (x, y, z, rx = 0, rz = 0) => { const s = mesh(screwGeo, darkMetal, false); s.position.set(x, y, z); s.rotation.set(rx, 0, rz); g.add(s); };
     for (const x of [-W / 2 + 0.014, W / 2 - 0.014]) for (const z of [BZ + 0.014, SZ - 0.012]) screw(x, Y1 + 0.0015, z);
-    const ventGeo = new T.BoxGeometry(0.002, 0.006, 0.05);
-    for (const sx of [-1, 1]) for (let k = 0; k < 5; k++) {
-      const v = mesh(ventGeo, rubber, false);
-      v.position.set(sx * (W / 2 + 0.0005), 0.024 + k * 0.012, -0.03); g.add(v);
-    }
 
     // ---------- 頂上的四個接頭與電纜 ----------
     const pipeZ = BZ - 0.035, pipeY = 0.07;
-    const ribGeo = ribbedCylinder(0.02, 0.04);
+    // 絕緣端子：一圈圈橫紋的圓柱（像礙子），越上面越細
+    const ribGeo = (() => {
+      const pts = [];
+      for (let i = 0; i <= 6; i++) { const y = -0.02 + i * 0.0066, k = 1 - i * 0.04; pts.push(new T.Vector2(0.016 * k, y), new T.Vector2(0.021 * k, y + 0.0018), new T.Vector2(0.021 * k, y + 0.0035), new T.Vector2(0.016 * k, y + 0.0055)); }
+      pts.push(new T.Vector2(0, 0.022));
+      return new T.LatheGeometry([new T.Vector2(0, -0.02), ...pts], 20);
+    })();
     const neckGeo = new T.CylinderGeometry(0.014, 0.017, 0.012, 16);
     const capGeo = new T.CylinderGeometry(0.012, 0.0145, 0.01, 16);
     for (let k = 0; k < 4; k++) {
@@ -3941,245 +3939,362 @@ const WK = (() => {
 
 </script>
 <script>
-// 房間的道具：照原版把桌子四周塞滿——兩邊靠近的紅磚牆、天花板的木樑與燈架、
-// 兩盞舞台燈（鏡片跟吊燈共用材質：斷電、閃爍時一起暗）、垂下來的電線、
-// 左邊的大喇叭與音響堆、一疊舊紙，右邊的收音機機櫃與一張木椅
+// 房間的道具：照原版開場的全景把桌子四周塞滿——兩邊的紅磚牆（剝落、髒污）、天花板的深色木樑與燈架、
+// 一大堆弧形垂掛的黑電線、桌子正上方左右兩盞大型舞台聚光燈（黑色圓筒＋四片遮光扉，燈頭往下斜對桌面）、
+// 左邊一對落地音箱、疊起來的擴大機與錄音座、上面的雜物，右邊架子上的老機櫃、紅色的罐子、木椅
+// 位置是從原版截圖用透視反推的（鏡頭在玩家這端的低處、很廣的視角），所有器材都帶鏽、髒污和磨損，色調跟磚牆一致
 // buildProps(lampBulb) 在 room.js 的 buildRoom 最後呼叫
 (() => {
-  const { T, V, PI, scene, env, std, mesh, canvasTex, grain, blot, R } = WK;
+  const { T, V, PI, scene, env, std, mesh, canvasTex, blot, R } = WK;
   const add = (o, x, y, z) => { o.position.set(x, y, z); return o; };
   const flat = (geo, mat) => mesh(geo, mat, false);
 
   // ---------- 貼圖 ----------
-  // 舊音響的面板：米白／銀色，旋鈕、表頭、按鍵、刻度（只是樣子，沒有品牌字樣）
-  function panelTex(kind) {
-    return canvasTex(512, 160, (g, w, h) => {
-      g.fillStyle = kind === 'dark' ? '#2a2724' : '#b9b2a2'; g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 40; i++) blot(g, R(0, w), R(0, h), R(10, 50), 'rgba(60,40,25,.18)');
-      const ink = kind === 'dark' ? '#9a9488' : '#2b2722';
-      g.strokeStyle = ink; g.fillStyle = ink; g.lineWidth = 2;
-      g.strokeRect(6, 6, w - 12, h - 12);
-      if (kind === 'amp') {
-        // 兩個表頭、一排旋鈕
-        for (const x of [24, 140]) { g.fillStyle = '#d8cfa4'; g.fillRect(x, 22, 100, 60); g.strokeRect(x, 22, 100, 60); g.beginPath(); g.moveTo(x + 50, 76); g.lineTo(x + 30 + R(0, 40), 34); g.stroke(); }
-        for (let i = 0; i < 6; i++) { g.fillStyle = '#3a3530'; g.beginPath(); g.arc(280 + i * 38, 54, 14, 0, PI * 2); g.fill(); }
-        for (let i = 0; i < 10; i++) { g.fillStyle = '#4a443d'; g.fillRect(24 + i * 46, 108, 30, 22); }
-      } else if (kind === 'deck') {
-        // 兩個卡帶窗、按鍵
-        for (const x of [30, 270]) { g.fillStyle = '#151311'; g.fillRect(x, 20, 210, 80); g.fillStyle = '#5b544a'; g.beginPath(); g.arc(x + 60, 60, 18, 0, PI * 2); g.arc(x + 150, 60, 18, 0, PI * 2); g.fill(); }
-        for (let i = 0; i < 12; i++) { g.fillStyle = '#3d3832'; g.fillRect(30 + i * 38, 112, 28, 20); }
-      } else if (kind === 'receiver') {
-        // 頻率刻度窗、指針、旋鈕
-        g.fillStyle = '#1b1915'; g.fillRect(20, 18, w - 40, 56);
-        g.fillStyle = '#c8b77a'; for (let i = 0; i < 40; i++) g.fillRect(30 + i * 11.5, 40 + (i % 5 ? 10 : 0), 2, i % 5 ? 8 : 18);
-        g.fillStyle = '#d24a2a'; g.fillRect(170, 22, 3, 48);
-        for (let i = 0; i < 7; i++) { g.fillStyle = '#3a3530'; g.beginPath(); g.arc(44 + i * 70, 116, 18, 0, PI * 2); g.fill(); }
-      } else {
-        // 散熱孔、指示燈
-        for (let y = 24; y < h - 24; y += 12) g.fillRect(30, y, w * 0.55, 4);
-        g.fillStyle = '#c33'; g.fillRect(w - 80, 30, 12, 8);
+  // 髒污的舊漆面：底色＋大片暗斑、鏽、刮痕、往下流的水痕（器材的外殼都用這個，色調跟磚牆一致）
+  function grimeTex(base, size = 256) {
+    return canvasTex(size, size, (g, w, h) => {
+      g.fillStyle = base; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 60; i++) blot(g, R(0, w), R(0, h), R(8, 50), ['rgba(20,10,8,.35)', 'rgba(110,50,30,.28)', 'rgba(150,120,100,.12)'][i % 3]);
+      for (let i = 0; i < 26; i++) {
+        const x = R(0, w), y = R(0, h * 0.6), len = R(20, 120);
+        const gr = g.createLinearGradient(0, y, 0, y + len);
+        gr.addColorStop(0, 'rgba(90,40,22,.4)'); gr.addColorStop(1, 'rgba(90,40,22,0)');
+        g.fillStyle = gr; g.fillRect(x, y, R(2, 5), len);
       }
-      grain(g, w, h, 22);
+      g.lineWidth = 1;
+      for (let i = 0; i < 40; i++) { g.strokeStyle = `rgba(190,170,150,${R(0.1, 0.3)})`; const x = R(0, w), y = R(0, h), a = R(0, PI); g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * R(5, 30), y + Math.sin(a) * R(5, 30)); g.stroke(); }
+      // 鏽：一叢叢小塊
+      for (let i = 0; i < 14; i++) {
+        const cx = R(0, w), cy = R(0, h);
+        for (let k = 0; k < 10; k++) { g.fillStyle = ['rgba(130,58,28,.7)', 'rgba(80,36,18,.7)'][k % 2]; g.fillRect(cx + R(-12, 12), cy + R(-8, 8), R(2, 5), R(2, 4)); }
+      }
     });
   }
-  // 木頭（樑、椅子）
-  const woodTex = () => canvasTex(256, 64, (g, w, h) => {
-    g.fillStyle = '#3e2618'; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 40; i++) { g.strokeStyle = `rgba(${R(15, 40) | 0},${R(8, 20) | 0},4,${R(0.3, 0.7)})`; g.lineWidth = R(1, 3); const y = R(0, h); g.beginPath(); g.moveTo(0, y); g.bezierCurveTo(w * 0.3, y + R(-6, 6), w * 0.7, y + R(-6, 6), w, y + R(-4, 4)); g.stroke(); }
-    grain(g, w, h, 24);
-  }, [3, 1]);
+  // 舊音響的面板：米白／銀色，旋鈕、表頭、按鍵、刻度、小顯示窗（只是樣子，沒有品牌字樣）
+  function panelTex(kind) {
+    return canvasTex(512, 192, (g, w, h) => {
+      g.fillStyle = kind === 'dark' ? '#2a2420' : '#a89c88'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 50; i++) blot(g, R(0, w), R(0, h), R(10, 50), i % 2 ? 'rgba(60,30,20,.25)' : 'rgba(110,50,30,.18)');
+      const ink = '#2b2420';
+      g.strokeStyle = ink; g.fillStyle = ink; g.lineWidth = 3;
+      g.strokeRect(6, 6, w - 12, h - 12);
+      const knob = (x, y, r) => { g.fillStyle = '#1e1a17'; g.beginPath(); g.arc(x, y, r, 0, PI * 2); g.fill(); g.fillStyle = '#8a8070'; g.fillRect(x - 2, y - r, 4, r * 0.7); };
+      const lcd = (x, y, cw, ch) => { g.fillStyle = '#0d0c0a'; g.fillRect(x, y, cw, ch); g.fillStyle = '#d8ffd0'; for (let i = 0; i < cw / 12; i++) if (Math.random() < 0.6) g.fillRect(x + 4 + i * 12, y + ch / 2 - 3, 8, 6); };
+      if (kind === 'amp') {
+        // 兩個表頭、一排旋鈕、一排按鍵
+        for (const x of [24, 150]) { g.fillStyle = '#cfc4a0'; g.fillRect(x, 22, 110, 66); g.strokeRect(x, 22, 110, 66); g.beginPath(); g.moveTo(x + 55, 82); g.lineTo(x + 30 + R(0, 50), 32); g.stroke(); }
+        for (let i = 0; i < 5; i++) knob(300 + i * 42, 56, 15);
+        for (let i = 0; i < 12; i++) { g.fillStyle = i % 3 ? '#3e3730' : '#d0c8b4'; g.fillRect(24 + i * 38, 120, 26, 24); }
+        lcd(300, 120, 180, 30);
+      } else if (kind === 'deck') {
+        // 兩個卡帶窗、按鍵、計數器
+        for (const x of [24, 270]) { g.fillStyle = '#151210'; g.fillRect(x, 20, 210, 86); g.fillStyle = '#5b4e44'; g.beginPath(); g.arc(x + 60, 62, 18, 0, PI * 2); g.arc(x + 150, 62, 18, 0, PI * 2); g.fill(); }
+        for (let i = 0; i < 12; i++) { g.fillStyle = '#3d3530'; g.fillRect(24 + i * 38, 124, 28, 22); }
+        lcd(24, 156, 120, 22);
+      } else if (kind === 'receiver') {
+        // 頻率刻度窗、指針、旋鈕、小顯示窗
+        g.fillStyle = '#16130f'; g.fillRect(20, 18, w - 40, 60);
+        g.fillStyle = '#c8b77a'; for (let i = 0; i < 40; i++) g.fillRect(30 + i * 11.5, 42 + (i % 5 ? 10 : 0), 3, i % 5 ? 8 : 18);
+        g.fillStyle = '#d24a2a'; g.fillRect(170, 22, 4, 52);
+        for (let i = 0; i < 6; i++) knob(44 + i * 64, 128, 18);
+        lcd(420, 110, 72, 36);
+      } else {
+        // 機櫃：刻度窗、旋鈕、散熱孔
+        for (const x of [24, 200]) { g.fillStyle = '#cfc4a0'; g.fillRect(x, 20, 150, 56); g.strokeRect(x, 20, 150, 56); for (let i = 0; i < 12; i++) g.fillRect(x + 8 + i * 12, 60, 2, 12); }
+        for (let i = 0; i < 4; i++) knob(400 + (i % 2) * 50, 40 + Math.floor(i / 2) * 50, 15);
+        for (let y = 100; y < h - 20; y += 12) g.fillRect(24, y, w * 0.6, 5);
+        lcd(360, 140, 120, 30);
+      }
+    });
+  }
+  // 喇叭網罩：深色的細格網，邊緣磨損
+  const grilleTex = () => canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#2a2420'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#100d0b';
+    for (let y = 0; y < h; y += 4) for (let x = (y / 4) % 2 ? 2 : 0; x < w; x += 4) g.fillRect(x, y, 2, 2);
+    for (let i = 0; i < 20; i++) blot(g, R(0, w), R(0, h), R(10, 40), 'rgba(110,60,40,.25)');
+  });
+  // 木頭（樑、椅子、柱子）：深褐、粗木紋
+  const woodTex = () => canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#3a2016'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 60; i++) { g.strokeStyle = `rgba(${R(10, 40) | 0},${R(6, 16) | 0},4,${R(0.3, 0.7)})`; g.lineWidth = R(1, 3); const y = R(0, h); g.beginPath(); g.moveTo(0, y); g.bezierCurveTo(w * 0.3, y + R(-6, 6), w * 0.7, y + R(-6, 6), w, y + R(-4, 4)); g.stroke(); }
+    for (let i = 0; i < 20; i++) blot(g, R(0, w), R(0, h), R(8, 30), 'rgba(10,5,3,.3)');
+  }, [2, 1]);
   // 紙：泛黃、上面有幾行字的樣子
-  const paperTex = () => canvasTex(128, 128, (g, w, h) => {
-    g.fillStyle = '#b8ad8c'; g.fillRect(0, 0, w, h);
-    g.fillStyle = 'rgba(40,30,20,.45)'; for (let y = 14; y < h - 10; y += 8) g.fillRect(12, y, R(50, 100), 2);
-    for (let i = 0; i < 8; i++) blot(g, R(0, w), R(0, h), R(8, 30), 'rgba(90,60,20,.2)');
+  const paperTex = () => canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#b4a68a'; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(40,30,20,.45)'; for (let y = 24; y < h - 20; y += 14) g.fillRect(20, y, R(80, 200), 4);
+    for (let i = 0; i < 10; i++) blot(g, R(0, w), R(0, h), R(14, 50), 'rgba(90,50,20,.25)');
   });
 
   // ---------- 小零件 ----------
   // 懸垂的電線（兩端 a、b，往下垂 sag 公尺）
   function cable(a, b, sag, r = 0.012, mat) {
     const pts = [];
-    for (let i = 0; i <= 12; i++) { const t = i / 12; pts.push(a.clone().lerp(b, t).add(V(0, -sag * 4 * t * (1 - t), 0))); }
-    return flat(new T.TubeGeometry(new T.CatmullRomCurve3(pts), 24, r, 6, false), mat);
+    for (let i = 0; i <= 14; i++) { const t = i / 14; pts.push(a.clone().lerp(b, t).add(V(0, -sag * 4 * t * (1 - t), 0))); }
+    return flat(new T.TubeGeometry(new T.CatmullRomCurve3(pts), 32, r, 6, false), mat);
   }
-  // 舞台燈（螺紋透鏡燈）：圓筒燈身、前面鏡片、四片遮光板、U 形吊架；aim 是燈要照的地方
-  function stageLight(at, aim, lensMat, haloMat, metal, dark) {
+  // 舞台聚光燈：黑色圓筒燈身、後蓋、散熱片、前面鏡片、四片往外張的遮光扉、U 形吊架；aim 是燈要照的地方
+  function stageLight(at, aim, lensMat, mats) {
+    const { body: bodyM, dark, ring: ringM } = mats;
     const g = new T.Group();
     g.position.copy(at);
     const body = new T.Group();
     g.add(body);
     body.lookAt(aim);
     // 燈身沿著 body 的 +z（往 aim）
-    const cyl = flat(new T.CylinderGeometry(0.12, 0.125, 0.26, 20, 1), metal);
+    const cyl = flat(new T.CylinderGeometry(0.13, 0.135, 0.3, 24, 1), bodyM);
     cyl.rotation.x = PI / 2; body.add(cyl);
-    const back = flat(new T.CylinderGeometry(0.1, 0.12, 0.08, 20), metal);
-    back.rotation.x = PI / 2; back.position.z = -0.16; body.add(back);
-    for (let i = 0; i < 5; i++) { const fin = flat(new T.TorusGeometry(0.122, 0.006, 4, 24), dark); fin.position.z = -0.08 + i * 0.035; body.add(fin); }
-    const ring = flat(new T.TorusGeometry(0.11, 0.014, 6, 24), dark);
-    ring.position.z = 0.135; body.add(ring);
-    const lens = new T.Mesh(new T.CircleGeometry(0.1, 24), lensMat);
-    lens.position.z = 0.138; body.add(lens);
-    const halo = new T.Sprite(haloMat);
-    halo.scale.set(0.2, 0.2, 1); halo.position.z = 0.16; body.add(halo);
-    // 遮光板：上下左右各一片，往外張開
+    const back = flat(new T.CylinderGeometry(0.1, 0.13, 0.08, 24), bodyM);
+    back.rotation.x = PI / 2; back.position.z = -0.19; body.add(back);
+    for (let i = 0; i < 4; i++) { const fin = flat(new T.TorusGeometry(0.135, 0.008, 4, 28), dark); fin.position.z = -0.1 + i * 0.04; body.add(fin); }
+    // 前框：一圈厚厚的環，裡面是有一點反光的鏡片（跟吊燈共用材質：斷電、閃爍會一起暗）
+    const ring = flat(new T.TorusGeometry(0.12, 0.022, 8, 28), ringM);
+    ring.position.z = 0.152; body.add(ring);
+    const lens = new T.Mesh(new T.CircleGeometry(0.11, 28), lensMat);
+    lens.position.z = 0.148; body.add(lens);
+    // 遮光扉：上下左右各一片，鉸鍊在前框外緣，往外張開
     for (let k = 0; k < 4; k++) {
       const hinge = new T.Group();
       hinge.rotation.z = k * PI / 2;
-      hinge.position.z = 0.14;
+      hinge.position.z = 0.16;
       body.add(hinge);
-      // 鉸鍊在鏡片邊緣（y = 0.125），板子往前伸 13 公分、往外張開
       const tilt = new T.Group();
-      tilt.position.y = 0.125;
-      tilt.rotation.x = -0.55 - R(0, 0.25);
+      tilt.position.y = 0.14;
+      tilt.rotation.x = -0.5 - (k % 2) * 0.25;
       hinge.add(tilt);
-      const flap = flat(new T.BoxGeometry(0.2, 0.004, 0.13), dark);
-      flap.position.z = 0.065;
-      tilt.add(flap);
+      // 上下兩片寬、左右兩片窄（梯形的樣子用兩塊疊）
+      const wide = k % 2 === 0;
+      const flap = flat(new T.BoxGeometry(wide ? 0.27 : 0.2, 0.006, 0.17), dark);
+      flap.position.z = 0.085; tilt.add(flap);
+      const tip = flat(new T.BoxGeometry(wide ? 0.33 : 0.25, 0.006, 0.06), dark);
+      tip.position.z = 0.16; tilt.add(tip);
     }
-    // U 形吊架：兩根側臂、上面一根橫桿接到燈架的管子
+    // U 形吊架：兩根側臂夾住燈身兩側，上面一根橫桿、一根吊桿接到燈架
     const yoke = new T.Group();
     g.add(yoke);
     const dir = aim.clone().sub(at);
     yoke.rotation.y = Math.atan2(dir.x, dir.z);
-    for (const sx of [-1, 1]) { const arm = flat(new T.BoxGeometry(0.012, 0.2, 0.03), dark); arm.position.set(sx * 0.14, 0.06, 0); yoke.add(arm); }
-    const top = flat(new T.BoxGeometry(0.29, 0.014, 0.03), dark);
-    top.position.y = 0.16; yoke.add(top);
-    const stem = flat(new T.CylinderGeometry(0.01, 0.01, 0.12), dark);
-    stem.position.y = 0.22; yoke.add(stem);
+    for (const sx of [-1, 1]) {
+      const arm = flat(new T.BoxGeometry(0.014, 0.24, 0.04), dark); arm.position.set(sx * 0.155, 0.1, 0); yoke.add(arm);
+      const knob = flat(new T.CylinderGeometry(0.025, 0.025, 0.02, 12), dark); knob.rotation.z = PI / 2; knob.position.set(sx * 0.17, 0, 0); yoke.add(knob);
+    }
+    const top = flat(new T.BoxGeometry(0.33, 0.016, 0.04), dark);
+    top.position.y = 0.22; yoke.add(top);
     return g;
   }
-  // 喇叭：深色木箱、上面一個方形號角、下面一個大低音單體
-  function speaker(cabinet, metal, cone) {
+  // 落地音箱：舊木箱（髒污）、網罩、大低音單體、上面的高音、四顆腳
+  function speaker(cabinet, metal, cone, grille, W = 0.42, H = 0.62, D = 0.36) {
     const g = new T.Group();
-    const W = 0.5, H = 0.95, D = 0.4;
     g.add(add(flat(new T.BoxGeometry(W, H, D), cabinet), 0, H / 2, 0));
+    // 網罩的框（凸起一圈）
+    const fz = D / 2 + 0.006;
+    g.add(add(flat(new T.BoxGeometry(W * 0.92, H * 0.94, 0.012), grille), 0, H / 2, fz - 0.004));
     // 低音：外框、懸邊、紙盆、防塵蓋
-    const wy = 0.33, wz = D / 2 + 0.002;
-    const frame = flat(new T.TorusGeometry(0.19, 0.018, 8, 32), metal); g.add(add(frame, 0, wy, wz));
-    const surround = flat(new T.TorusGeometry(0.165, 0.016, 8, 32), cone); g.add(add(surround, 0, wy, wz - 0.005));
-    const prof = [[0.16, 0], [0.12, -0.03], [0.06, -0.065], [0.03, -0.08], [0, -0.08]].map(([r, y]) => new T.Vector2(r, y));
-    const coneM = flat(new T.LatheGeometry(prof, 28), cone); coneM.rotation.x = -PI / 2; g.add(add(coneM, 0, wy, wz));
-    const cap = flat(new T.SphereGeometry(0.04, 16, 8, 0, PI * 2, 0, PI / 2), cone); cap.rotation.x = PI / 2; cap.scale.z = 0.5; g.add(add(cap, 0, wy, wz - 0.07));
-    // 號角：方形的框、往裡收的喇叭口
-    const hy = 0.74;
-    g.add(add(flat(new T.BoxGeometry(0.34, 0.24, 0.02), metal), 0, hy, D / 2 + 0.01));
-    const horn = flat(new T.CylinderGeometry(0.03, 0.14, 0.1, 4, 1, true), cone);
-    horn.rotation.set(PI / 2, PI / 4, 0); horn.scale.set(1.15, 1, 0.8);
-    g.add(add(horn, 0, hy, D / 2 - 0.02));
-    // 四顆腳
-    for (const x of [-0.2, 0.2]) for (const z of [-0.15, 0.15]) g.add(add(flat(new T.CylinderGeometry(0.02, 0.02, 0.03), metal), x, -0.015, z));
+    const wy = H * 0.36, wr = W * 0.36;
+    g.add(add(flat(new T.TorusGeometry(wr, 0.018, 8, 32), metal), 0, wy, fz + 0.004));
+    g.add(add(flat(new T.TorusGeometry(wr * 0.86, 0.016, 8, 32), cone), 0, wy, fz));
+    const prof = [[wr * 0.84, 0], [wr * 0.6, -0.03], [wr * 0.3, -0.065], [wr * 0.15, -0.08], [0, -0.08]].map(([r, y]) => new T.Vector2(r, y));
+    const coneM = flat(new T.LatheGeometry(prof, 28), cone); coneM.rotation.x = -PI / 2; g.add(add(coneM, 0, wy, fz));
+    const cap = flat(new T.SphereGeometry(wr * 0.22, 16, 8, 0, PI * 2, 0, PI / 2), metal); cap.rotation.x = PI / 2; cap.scale.z = 0.5; g.add(add(cap, 0, wy, fz - 0.07));
+    // 高音：方框裡一個小圓
+    const hy = H * 0.8;
+    g.add(add(flat(new T.BoxGeometry(W * 0.5, H * 0.18, 0.02), metal), 0, hy, fz + 0.004));
+    g.add(add(flat(new T.TorusGeometry(W * 0.08, 0.01, 6, 20), cone), 0, hy, fz + 0.015));
+    for (const x of [-W / 2 + 0.04, W / 2 - 0.04]) for (const z of [-D / 2 + 0.04, D / 2 - 0.04]) g.add(add(flat(new T.CylinderGeometry(0.02, 0.02, 0.03), metal), x, -0.015, z));
     return g;
   }
-  // 一台音響（盒子＋正面貼圖）
+  // 一台機器（盒子＋正面貼圖＋兩側的鐵片）
   function unit(w, h, d, kind, side, body) {
     const g = new T.Group();
     g.add(add(flat(new T.BoxGeometry(w, h, d), body), 0, h / 2, 0));
-    const face = flat(new T.PlaneGeometry(w * 0.97, h * 0.9), std(0xffffff, { map: panelTex(kind), roughness: 0.55, metalness: 0.25, envMap: env.tex, envMapIntensity: 0.5 }));
+    const face = flat(new T.PlaneGeometry(w * 0.97, h * 0.9), std(0xffffff, { map: panelTex(kind), roughness: 0.6, metalness: 0.2, envMap: env.tex, envMapIntensity: 0.4 }));
     g.add(add(face, 0, h / 2, d / 2 + 0.001));
     for (const sx of [-1, 1]) g.add(add(flat(new T.BoxGeometry(0.02, h * 0.98, d * 0.98), side), sx * (w / 2 + 0.008), h / 2, 0));
     return g;
   }
-  // 木椅
+  // 木椅：座板、四隻腳、靠背三根橫條
   function chair(wood) {
     const g = new T.Group();
     g.add(add(flat(new T.BoxGeometry(0.42, 0.035, 0.4), wood), 0, 0.45, 0));
     for (const x of [-0.18, 0.18]) for (const z of [-0.17, 0.17]) g.add(add(flat(new T.BoxGeometry(0.035, 0.45, 0.035), wood), x, 0.225, z));
-    for (const x of [-0.18, 0.18]) g.add(add(flat(new T.BoxGeometry(0.035, 0.5, 0.035), wood), x, 0.72, -0.17));
-    for (const y of [0.62, 0.8, 0.94]) g.add(add(flat(new T.BoxGeometry(0.38, 0.06, 0.02), wood), 0, y, -0.17));
+    for (const x of [-0.18, 0.18]) g.add(add(flat(new T.BoxGeometry(0.04, 0.55, 0.04), wood), x, 0.74, -0.17));
+    for (const y of [0.64, 0.82, 0.98]) g.add(add(flat(new T.BoxGeometry(0.4, 0.07, 0.025), wood), 0, y, -0.17));
+    return g;
+  }
+  // 紅色的罐子（汽油罐的樣子）：方圓的罐身、提把、斜斜的壺嘴，漆掉了一些
+  function canister(red, metal) {
+    const g = new T.Group();
+    const body = flat(new T.BoxGeometry(0.14, 0.2, 0.09), red); g.add(add(body, 0, 0.1, 0));
+    for (const sx of [-1, 1]) { const side = flat(new T.CylinderGeometry(0.045, 0.045, 0.2, 12, 1, false, 0, PI), red); side.rotation.y = sx > 0 ? 0 : PI; g.add(add(side, sx * 0.07, 0.1, 0)); }
+    const handle = flat(new T.TorusGeometry(0.035, 0.008, 6, 14, PI), red); g.add(add(handle, -0.02, 0.205, 0));
+    const spout = flat(new T.CylinderGeometry(0.012, 0.016, 0.07, 10), metal); spout.rotation.z = -0.6; g.add(add(spout, 0.05, 0.22, 0));
     return g;
   }
 
-  function buildProps(lampBulb) {
-    const FLOOR = -0.85, CEIL = 2.55;
-    const metal = std(0x2c2a28, { metalness: 0.7, roughness: 0.45, envMap: env.tex, envMapIntensity: 0.6 });
-    // 舞台燈的燈身：灰一點的舊鐵，暗處才看得出輪廓
-    const lampMetal = std(0x5a5550, { metalness: 0.6, roughness: 0.5, envMap: env.tex, envMapIntensity: 0.9 });
-    const dark = std(0x121110, { metalness: 0.5, roughness: 0.6 });
-    const cableMat = std(0x0a0a0a, { roughness: 0.7 });
-    const wood = std(0xffffff, { map: woodTex(), roughness: 0.75 });
-    const cabinet = std(0x1e1a17, { roughness: 0.8 });
-    const silver = std(0x9c968a, { metalness: 0.6, roughness: 0.4, envMap: env.tex, envMapIntensity: 0.6 });
-    const cone = std(0x161514, { roughness: 0.9 });
+  // 房間的器材都不會動：同一種材質的網格全部合成一個（世界座標），畫一次就好，省下一百多次繪製呼叫（低畫質要 60fps）
+  function mergeStatic(roots) {
+    scene.updateMatrixWorld(true);
+    const byMat = new Map(), drop = [];
+    for (const r of roots) r.traverse(o => {
+      if (!o.isMesh || Array.isArray(o.material)) return;
+      const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
+      if (!g.attributes.uv) return;
+      if (!byMat.has(o.material)) byMat.set(o.material, []);
+      byMat.get(o.material).push(g);
+      drop.push(o);
+    });
+    for (const o of drop) o.parent.remove(o);
+    for (const r of roots) if (r.parent && !r.children.length && !r.isLight) r.parent.remove(r);
+    for (const [mat, list] of byMat) {
+      const n = list.reduce((k, g) => k + g.attributes.position.count, 0);
+      const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+      let at = 0;
+      for (const g of list) {
+        pos.set(g.attributes.position.array, at * 3); nor.set(g.attributes.normal.array, at * 3); uv.set(g.attributes.uv.array, at * 2);
+        at += g.attributes.position.count; g.dispose();
+      }
+      const geo = new T.BufferGeometry();
+      geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('normal', new T.BufferAttribute(nor, 3)); geo.setAttribute('uv', new T.BufferAttribute(uv, 2));
+      const m = new T.Mesh(geo, mat);
+      m.receiveShadow = true;
+      scene.add(m);
+    }
+  }
 
-    // ---------- 靠近桌子的兩面紅磚牆（原版的房間很窄） ----------
+  function buildProps(lampBulb) {
+    const before = new Set(scene.children);
+    const FLOOR = -0.85, CEIL = 2.1, WALL = 1.95;
+    const tex = (base, rep) => { const t = grimeTex(base); if (rep) { t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep[0], rep[1]); } return t; };
+    const metal = std(0xffffff, { map: tex('#3a2e28'), metalness: 0.55, roughness: 0.55, envMap: env.tex, envMapIntensity: 0.5 });
+    const lampBody = std(0xffffff, { map: tex('#4a403c'), metalness: 0.45, roughness: 0.55, envMap: env.tex, envMapIntensity: 0.8 });
+    const lampRing = std(0x3a302c, { metalness: 0.5, roughness: 0.6, envMap: env.tex, envMapIntensity: 0.5 });
+    const dark = std(0xffffff, { map: tex('#151110'), metalness: 0.4, roughness: 0.6 });
+    // 遮光扉、吊架：比燈身再淺一點的舊鐵，暗背景前才看得出輪廓
+    const flapM = std(0xffffff, { map: tex('#6a5e58'), metalness: 0.3, roughness: 0.65, side: T.DoubleSide });
+    const cableMat = std(0x080706, { roughness: 0.6 });
+    const wood = std(0xc8b0a8, { map: woodTex(), roughness: 0.8 });
+    const cabinet = std(0xffffff, { map: tex('#2c201a'), roughness: 0.8 });
+    const silver = std(0xffffff, { map: tex('#7a6c60'), metalness: 0.45, roughness: 0.5, envMap: env.tex, envMapIntensity: 0.5 });
+    const cone = std(0x161210, { roughness: 0.9 });
+    const grille = std(0xffffff, { map: grilleTex(), roughness: 0.9 });
+    const red = std(0xffffff, { map: tex('#7a1c14'), roughness: 0.6, metalness: 0.2 });
+    const paper = std(0xffffff, { map: paperTex(), roughness: 0.9 });
+
+    // ---------- 兩邊的紅磚牆（往後沒入黑暗：房間後面的牆在霧裡） ----------
     // 房間的牆材質是 BackSide（從盒子裡面看），這兩面要正面
     const brick = WK.M.wall.clone(); brick.side = T.FrontSide;
     for (const sx of [-1, 1]) {
-      const wall = flat(new T.PlaneGeometry(4.6, CEIL - FLOOR), brick);
+      const wall = flat(new T.PlaneGeometry(5, CEIL - FLOOR), brick);
       wall.rotation.y = -sx * PI / 2;
-      wall.position.set(sx * 2.15, (CEIL + FLOOR) / 2, -0.6);
+      wall.position.set(sx * WALL, (CEIL + FLOOR) / 2, -0.4);
       wall.receiveShadow = true;
       scene.add(wall);
+      // 牆邊的木柱
+      for (const z of [-1.3, 0.2]) scene.add(add(flat(new T.BoxGeometry(0.12, CEIL - FLOOR, 0.12), wood), sx * (WALL - 0.08), (CEIL + FLOOR) / 2, z));
     }
 
-    // ---------- 天花板：木樑、橫在桌子上方的燈架 ----------
-    for (const x of [-1.6, -0.55, 0.55, 1.6]) scene.add(add(flat(new T.BoxGeometry(0.16, 0.22, 5.2), wood), x, CEIL - 0.2, -0.4));
-    for (const z of [-2.2, -0.9, 0.5, 1.8]) scene.add(add(flat(new T.BoxGeometry(4.3, 0.14, 0.12), wood), 0, CEIL - 0.4, z));
-    // 燈架比天花板低很多、在莊家前面一點：坐著看過去，兩盞燈在畫面左上、右上（跟原版一樣）
-    const TY = 1.5, TZ = -0.7;
-    const pipe = flat(new T.CylinderGeometry(0.03, 0.03, 3.4, 12), metal);
-    pipe.rotation.z = PI / 2; scene.add(add(pipe, 0, TY, TZ));
-    for (const x of [-1.4, 1.4]) scene.add(add(flat(new T.CylinderGeometry(0.015, 0.015, CEIL - 0.4 - TY, 8), metal), x, (TY + CEIL - 0.4) / 2, TZ));
+    // ---------- 天花板：深色木樑 ----------
+    for (const x of [-1.5, -0.5, 0.5, 1.5]) scene.add(add(flat(new T.BoxGeometry(0.14, 0.2, 5.2), wood), x, CEIL - 0.1, -0.6));
+    for (const z of [-2.4, -1.3, -0.2, 0.9]) scene.add(add(flat(new T.BoxGeometry(2 * WALL, 0.16, 0.14), wood), 0, CEIL - 0.28, z));
+    // 燈架：兩根橫管（上下）＋兩端往上接到樑的吊桿，橫在莊家前面
+    const TZ = -0.8, TY = 1.12;
+    for (const y of [TY, TY + 0.17]) {
+      const p = flat(new T.CylinderGeometry(0.026, 0.026, 2.5, 12), dark);
+      p.rotation.z = PI / 2; scene.add(add(p, 0, y, TZ));
+    }
+    for (let i = 0; i < 9; i++) scene.add(add(flat(new T.CylinderGeometry(0.008, 0.008, 0.17, 6), dark), -1.1 + i * 0.275, TY + 0.085, TZ));
+    for (const x of [-1.2, 1.2]) scene.add(add(flat(new T.CylinderGeometry(0.02, 0.02, CEIL - 0.36 - TY, 8), dark), x, (TY + CEIL - 0.36) / 2, TZ));
 
-    // ---------- 兩盞舞台燈：掛在燈架上、斜斜照向桌子 ----------
-    const lensMat = lampBulb.material, haloMat = lampBulb.userData.halo.material;
+    // ---------- 兩盞舞台聚光燈：從燈架吊下來，在莊家的臉兩側，燈頭往下斜對著桌面 ----------
+    // 鏡片：暗紅褐的厚玻璃，裡面一點反光（燈往下照，從座位看不到亮面）；scene.js 每格跟著燈的明暗調
+    const lensMat = new T.MeshBasicMaterial({ color: 0x5a3426 });
+    WK.stageLens = lensMat;
+    WK.stageLights = [];
     for (const sx of [-1, 1]) {
-      const at = V(sx * 0.95, TY - 0.3, TZ);
-      // 照向桌子中間偏莊家那邊：坐著看是斜斜的燈身＋遮光板，不是正對鏡頭的一個亮圓
-      const sl = stageLight(at, V(-sx * 0.1, 0, -0.35), lensMat, haloMat, lampMetal, metal);
-      sl.scale.setScalar(1.45);
+      const at = V(sx * 0.8, 0.8, -0.72);
+      const sl = stageLight(at, V(-sx * 0.05, -0.45, 0.45), lensMat, { body: lampBody, dark: flapM, ring: lampRing });
+      sl.scale.setScalar(1.15);
       scene.add(sl);
-      // 燈的電線：從燈後面掛到燈架、再垂到旁邊的牆
-      scene.add(cable(at.clone().add(V(0, 0.05, -0.12)), V(sx * 0.5, TY, TZ), 0.12, 0.01, cableMat));
-      scene.add(cable(V(sx * 0.9, TY + 0.02, TZ), V(sx * 2.1, 1.7, TZ - 0.4), 0.35, 0.012, cableMat));
+      // 吊桿：燈架到吊架
+      scene.add(add(flat(new T.CylinderGeometry(0.014, 0.014, TY - at.y - 0.2, 8), dark), at.x, (TY + at.y + 0.28) / 2, TZ));
+      // 燈的電線：從燈後面往上繞到燈架、再往外垂到牆邊
+      scene.add(cable(at.clone().add(V(0, 0.08, -0.25)), V(sx * 0.55, TY, TZ), 0.25, 0.011, cableMat));
+      scene.add(cable(V(sx * 1.0, TY + 0.17, TZ), V(sx * WALL, 1.6, TZ + 0.5), 0.35, 0.013, cableMat));
+      // 真正的燈：從燈的位置往桌面照（主光，桌面亮、桌外很快變暗）
+      const s = new T.SpotLight(0xffe8d0, 0.35, 4, 0.75, 0.6, 1.6);
+      s.position.copy(at).add(V(0, 0.05, 0.1));
+      s.target.position.set(sx * 0.2, 0, 0.1);
+      s.userData.base = 0.35;
+      scene.add(s, s.target);
+      WK.stageLights.push(s);
     }
     // 原本的吊燈藏起來（燈光本身還在，鏡片換成上面兩盞燈）
     lampBulb.visible = false;
     lampBulb.userData.halo.visible = false;
-    // 天花板上垂來垂去的電線
-    for (const [a, b, s] of [[V(-2.1, 2.1, -1.6), V(2.1, 2.05, -1.2), 0.45], [V(-2.1, 2.2, 0.4), V(0.4, 2.3, -2.4), 0.5], [V(2.1, 2.15, 1.0), V(-0.8, 2.3, -2.6), 0.55], [V(-1.6, 2.3, 1.6), V(1.6, 2.3, 1.4), 0.4]]) scene.add(cable(a, b, s, 0.011, cableMat));
+    // 天花板上很多弧形垂掛的黑電線，在畫面上方交錯
+    const C = CEIL - 0.3;
+    for (const [a, b, s, r] of [
+      [V(-WALL, C, -0.4), V(-0.4, TY + 0.2, TZ), 0.3, 0.013], [V(-0.4, TY + 0.2, TZ), V(0.5, TY + 0.25, TZ - 0.1), 0.3, 0.013],
+      [V(0.5, TY + 0.25, TZ - 0.1), V(WALL, C, -0.6), 0.25, 0.013], [V(-WALL, C - 0.1, 0.6), V(-0.6, C, -1.3), 0.45, 0.011],
+      [V(WALL, C - 0.05, 0.5), V(0.6, C, -1.4), 0.5, 0.011], [V(-1.0, C, 0.9), V(1.0, C, 0.9), 0.35, 0.012],
+      [V(-WALL, C, -1.6), V(WALL, C, -1.9), 0.55, 0.012], [V(-0.5, C, -0.2), V(0.5, C, -0.2), 0.4, 0.01],
+      [V(-1.5, C, 0.9), V(-0.2, TY + 0.17, TZ), 0.3, 0.01], [V(1.5, C, 0.9), V(0.25, TY + 0.17, TZ), 0.32, 0.01],
+    ]) scene.add(cable(a, b, s, r, cableMat));
 
-    // ---------- 左邊：大喇叭、上面疊兩台音響和一台監視器，旁邊一疊舊紙 ----------
+    // ---------- 左邊：一對落地音箱（架在箱子上）、疊起來的擴大機與錄音座、上面的雜物，旁邊架子上一疊舊紙 ----------
     const left = new T.Group();
-    left.position.set(-1.62, FLOOR, -0.05);
-    left.rotation.y = 0.55;
-    left.add(speaker(cabinet, silver, cone));
-    const amp = unit(0.48, 0.11, 0.34, 'amp', metal, silver); amp.position.y = 0.95; left.add(amp);
-    const deck = unit(0.46, 0.12, 0.32, 'deck', metal, silver); deck.position.set(0.01, 1.06, -0.01); deck.rotation.y = 0.05; left.add(deck);
-    // 監視器：白色的機身、黑色鏡頭
-    const cam = new T.Group(); cam.position.set(-0.08, 1.24, 0); cam.rotation.y = 0.5; left.add(cam);
-    cam.add(add(flat(new T.BoxGeometry(0.09, 0.08, 0.2), std(0xc9c4b6, { roughness: 0.5 })), 0, 0, 0));
-    const lensC = flat(new T.CylinderGeometry(0.03, 0.03, 0.04, 14), dark); lensC.rotation.x = PI / 2; cam.add(add(lensC, 0, 0, 0.11));
+    left.position.set(-1.45, -0.12, -0.45); left.rotation.y = 0.5;
+    left.add(add(flat(new T.BoxGeometry(0.5, 0.75, 0.42), cabinet), 0, -0.375, 0));
+    left.add(speaker(cabinet, silver, cone, grille));
+    const amp = unit(0.52, 0.11, 0.36, 'amp', metal, silver); amp.position.y = 0.62; left.add(amp);
+    const deck = unit(0.5, 0.12, 0.34, 'deck', metal, silver); deck.position.set(0.01, 0.73, -0.01); deck.rotation.y = 0.05; left.add(deck);
+    // 上面的雜物：一捲白色的東西、一個小盒子
+    const roll = flat(new T.CylinderGeometry(0.05, 0.05, 0.16, 16), std(0xffffff, { map: tex('#c8bea8'), roughness: 0.8 }));
+    roll.rotation.z = PI / 2; roll.rotation.y = 0.4; left.add(add(roll, -0.08, 0.9, 0.04));
+    left.add(add(flat(new T.BoxGeometry(0.12, 0.06, 0.1), dark), 0.13, 0.88, 0));
+    // 從機器垂下來的電線
+    for (let i = 0; i < 5; i++) left.add(cable(V(0.2 - i * 0.03, 0.68, 0.18), V(0.32 + i * 0.03, -0.7, 0.25 - i * 0.04), 0.06, 0.007, cableMat));
     scene.add(left);
-    // 後面一個架子：舊卡帶座、一疊紙
+    const left2 = speaker(cabinet, silver, cone, grille, 0.36, 0.55, 0.32);
+    left2.position.set(-1.35, -0.85, -1.0); left2.rotation.y = 0.45;
+    scene.add(left2);
+    // 架子：兩層木板、一疊舊紙
     const shelf = new T.Group();
-    shelf.position.set(-1.6, FLOOR, -0.85); shelf.rotation.y = 0.4;
-    shelf.add(add(flat(new T.BoxGeometry(0.55, 0.85, 0.4), cabinet), 0, 0.425, 0));
-    const rack = unit(0.5, 0.16, 0.34, 'vent', metal, metal); rack.position.y = 0.85; shelf.add(rack);
-    const paper = std(0xffffff, { map: paperTex(), roughness: 0.9 });
-    for (let i = 0; i < 9; i++) { const p = flat(new T.BoxGeometry(0.3, 0.012, 0.22), paper); p.position.set(R(-0.03, 0.03), 1.02 + i * 0.013, R(-0.03, 0.03)); p.rotation.y = R(-0.25, 0.25); shelf.add(p); }
+    shelf.position.set(-1.25, -0.2, -1.05); shelf.rotation.y = 0.25;
+    for (const y of [0, 0.35]) shelf.add(add(flat(new T.BoxGeometry(0.55, 0.025, 0.35), wood), 0, y, 0));
+    for (const x of [-0.26, 0.26]) shelf.add(add(flat(new T.BoxGeometry(0.025, 1.05, 0.35), wood), x, -0.3, 0));
+    for (let i = 0; i < 12; i++) { const p = flat(new T.BoxGeometry(0.34, 0.01, 0.25), paper); p.position.set(R(-0.03, 0.03), 0.02 + i * 0.012, R(-0.03, 0.03)); p.rotation.y = R(-0.25, 0.25); shelf.add(p); }
+    for (let i = 0; i < 6; i++) { const p = flat(new T.BoxGeometry(0.3, 0.01, 0.22), paper); p.position.set(R(-0.03, 0.03), 0.37 + i * 0.012, R(-0.03, 0.03)); p.rotation.y = R(-0.3, 0.3); shelf.add(p); }
     scene.add(shelf);
-    // 從音響垂到地上的線
-    for (let i = 0; i < 4; i++) scene.add(cable(V(-1.45 + i * 0.04, 0.05, -0.15 - i * 0.06), V(-1.3 + i * 0.05, FLOOR + 0.02, -0.5 - i * 0.1), 0.05, 0.008, cableMat));
 
-    // ---------- 右邊：收音機機櫃（後面）、木椅 ----------
+    // ---------- 右邊：靠牆架子上的老機櫃（面板、刻度窗、旋鈕）、紅色的罐子、木椅 ----------
     const right = new T.Group();
-    right.position.set(1.62, FLOOR, -0.8); right.rotation.y = -0.6;
-    right.add(add(flat(new T.BoxGeometry(0.6, 1.0, 0.42), cabinet), 0, 0.5, 0));
-    const rcv = unit(0.56, 0.16, 0.36, 'receiver', metal, silver); rcv.position.y = 1.0; right.add(rcv);
-    const amp2 = unit(0.5, 0.1, 0.34, 'amp', metal, silver); amp2.position.y = 1.16; amp2.rotation.y = -0.04; right.add(amp2);
+    right.position.set(1.15, -0.2, -0.95); right.rotation.y = -0.35;
+    right.add(add(flat(new T.BoxGeometry(0.7, 0.03, 0.45), wood), 0, 0, 0));
+    for (const x of [-0.33, 0.33]) right.add(add(flat(new T.BoxGeometry(0.03, 0.65, 0.4), wood), x, -0.33, 0));
+    const rack = unit(0.56, 0.3, 0.38, 'rack', metal, cabinet); rack.position.y = 0.015; right.add(rack);
+    const rcv = unit(0.5, 0.14, 0.34, 'receiver', metal, silver); rcv.position.set(0, 0.315, 0.01); rcv.rotation.y = 0.04; right.add(rcv);
     scene.add(right);
+    const can = canister(red, metal);
+    can.position.set(1.08, -0.2, -0.55); can.rotation.y = -0.6;
+    scene.add(can);
+    scene.add(add(flat(new T.BoxGeometry(0.3, 0.03, 0.3), wood), 1.08, -0.215, -0.55));
     const ch = chair(wood);
-    ch.position.set(1.72, FLOOR, 0.15); ch.rotation.y = -PI / 2 + 0.35;
+    ch.position.set(1.3, FLOOR, -0.3); ch.rotation.y = -PI / 2 + 0.5;
     scene.add(ch);
 
-    // 兩邊道具的微弱暖光（不然整片黑）；跟吊燈一起變暗、閃爍（scene.js 每格乘上 lampDim）
+    // 牆與器材的微弱暖紅光（磚牆要看得到、但比桌面暗很多）；跟吊燈一起變暗、閃爍（scene.js 每格乘上 lampDim）
     WK.propLights = [];
-    for (const [x, z] of [[-1.35, 0.2], [1.35, -0.3]]) {
-      const l = new T.PointLight(0xc0704e, 0.55, 2.4, 2);
-      l.position.set(x, 0.75, z); l.userData.base = 0.55;
+    // 最後一盞在燈架前面：舞台燈的燈身與遮光扉才看得出來（原版暗背景前看得到灰灰的燈）
+    // 燈的數量會直接加重每個像素的計算（低畫質要 60fps）：兩側各一盞照牆與器材，中間一盞照燈架與天花板
+    for (const [x, y, z, k, d] of [[-1.3, 1.2, -0.3, 3.1, 4], [1.3, 1.2, -0.3, 3.1, 4], [0, 1.75, -0.2, 1.5, 3.2]]) {
+      const l = new T.PointLight(0xa8857c, k, d, 1.2);
+      l.position.set(x, y, z); l.userData.base = k;
       scene.add(l); WK.propLights.push(l);
     }
+    for (const s of WK.stageLights) WK.propLights.push(s);
+    mergeStatic(scene.children.filter(o => !before.has(o) && !o.isLight && !(o.isObject3D && o.children.length === 0 && !o.isMesh)));
   }
 
   Object.assign(WK, { buildProps });
@@ -4206,8 +4321,7 @@ const WK = (() => {
     frame.position.set(0.6, 0.2, -3.45); scene.add(frame);
     const door = mesh(new T.BoxGeometry(0.95, 2.0, 0.06), std(0x1d1a16, { roughness: 0.7 }));
     door.position.set(0.6, 0.15, -3.42); scene.add(door);
-    const sign = new T.Mesh(new T.PlaneGeometry(0.4, 0.12), new T.MeshBasicMaterial({ color: 0x8a1410 }));
-    sign.position.set(0.6, 1.42, -3.4); scene.add(sign);
+    // （出口燈牌拿掉了：原版莊家後面是一片黑）
     redLight = new T.PointLight(0x9a1a12, 0.9, 4, 2);
     redLight.position.set(0.6, 1.3, -3.0); scene.add(redLight);
 
@@ -4235,20 +4349,23 @@ const WK = (() => {
     // 原版看不到光錐；畫面壓成少色後再淡也會變成一塊抖色的灰，乾脆不畫（物件留著，scene.js 還會調它）
     lightCone.visible = false;
 
-    spot = new T.SpotLight(0xfff0d0, 2.7, 7, 0.68, 0.55, 1.4);
-    spot.position.set(0, 2.06, 0.05);
-    spot.target.position.set(0, 0, -0.15);
+    // 主光：桌子正上方，照亮整張桌面，邊緣很快暗下去
+    spot = new T.SpotLight(0xfff0d0, 2.7, 7, 0.62, 0.45, 1.4);
+    spot.position.set(0, 2.06, 0.0);
+    spot.target.position.set(0, 0, -0.05);
     spot.castShadow = true;
     spot.shadow.mapSize.set(2048, 2048);
     spot.shadow.bias = -0.0004;
     spot.shadow.camera.near = 0.5; spot.shadow.camera.far = 4;
     scene.add(spot, spot.target);
 
-    scene.add(new T.HemisphereLight(0x5d7566, 0x050404, 0.16));
-    const fill = new T.PointLight(0x9fb8a8, 0.22, 3, 2);
-    fill.position.set(0, 0.9, 1.6); scene.add(fill);
-    const rim = new T.PointLight(0x6a1210, 0.8, 3, 2);
-    rim.position.set(0.5, 1.1, -1.9); scene.add(rim);
+    // 環境光與補光壓低：主光從上面來，桌子以外的地方很快變暗
+    scene.add(new T.HemisphereLight(0x6a5a50, 0x050303, 0.05));
+    // （原本玩家身後的補光與莊家背後的紅色輪廓光拿掉：主光從上面來，莊家的身體融進黑暗）
+    // 莊家的臉與手：從上前方打下來的窄光，在黑色背景前浮出來
+    const face = new T.SpotLight(0xffe8d8, 1.4, 3, 0.32, 0.6, 1.2);
+    face.position.set(0, 1.35, -0.25); face.target.position.set(0, 0.7, -1.15);
+    scene.add(face, face.target);
 
     flashLight = new T.PointLight(0xffb060, 0, 4, 2);
     scene.add(flashLight);
@@ -4323,34 +4440,54 @@ const WK = (() => {
     l.glow.material.opacity = 0.9 * on;
   }
 
+  // 桌框的橫切面（寬 0.08、凸出桌面 3.5 公分、上緣兩邊倒角），沿 z 擠出 len 公尺
+  function rimGeometry(len) {
+    const s = new T.Shape();
+    s.moveTo(-0.04, -0.07); s.lineTo(0.04, -0.07); s.lineTo(0.04, 0.02); s.lineTo(0.026, 0.035); s.lineTo(-0.026, 0.035); s.lineTo(-0.04, 0.02); s.closePath();
+    const geo = new T.ExtrudeGeometry(s, { depth: len, bevelEnabled: false });
+    geo.translate(0, 0, -len / 2);
+    // 木紋沿著長邊：側面的 uv 換成 (z, 高度)
+    const p = geo.attributes.position, uv = geo.attributes.uv;
+    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getZ(i) * 1.6, (p.getX(i) + p.getY(i)) * 3);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
   function buildTable() {
-    const top = mesh(new T.BoxGeometry(2.3, 0.05, 1.65), M.table);
-    top.position.y = -0.025; scene.add(top);
-    const rimGeoX = new T.BoxGeometry(2.42, 0.06, 0.06), rimGeoZ = new T.BoxGeometry(0.06, 0.06, 1.77);
-    for (const z of [-0.855, 0.855]) { const r = mesh(rimGeoX, M.rim); r.position.set(0, -0.012, z); scene.add(r); }
-    for (const x of [-1.18, 1.18]) { const r = mesh(rimGeoZ, M.rim); r.position.set(x, -0.012, 0); scene.add(r); }
-    const legGeo = new T.BoxGeometry(0.08, 0.82, 0.08);
-    for (const x of [-1.05, 1.05]) for (const z of [-0.72, 0.72]) {
-      const l = mesh(legGeo, M.rim); l.position.set(x, -0.46, z); scene.add(l);
+    // 長方形長桌：長邊從玩家（+z）延伸到莊家（-z），四周一圈凸起、有倒角的深色木框
+    const TB = WK.TABLE, W = TB.x * 2, L = TB.z1 - TB.z0, zc = (TB.z0 + TB.z1) / 2;
+    const top = mesh(new T.BoxGeometry(W, 0.05, L), M.table);
+    top.position.set(0, -0.025, zc); scene.add(top);
+    for (const sx of [-1, 1]) { const r = mesh(rimGeometry(L + 0.16), M.rim); r.position.set(sx * (TB.x + 0.04), 0, zc); scene.add(r); }
+    for (const z of [TB.z0 - 0.04, TB.z1 + 0.04]) { const r = mesh(rimGeometry(W), M.rim); r.rotation.y = PI / 2; r.position.set(0, 0, z); scene.add(r); }
+    // 桌裙與桌腳
+    const skirt = mesh(new T.BoxGeometry(W + 0.12, 0.1, L + 0.12), M.dark);
+    skirt.position.set(0, -0.12, zc); scene.add(skirt);
+    const legGeo = new T.BoxGeometry(0.08, 0.7, 0.08);
+    for (const x of [-TB.x + 0.08, TB.x - 0.08]) for (const z of [TB.z0 + 0.1, TB.z1 - 0.1]) {
+      const l = mesh(legGeo, M.rim); l.position.set(x, -0.52, z); scene.add(l);
     }
     // 道具格的白線畫在桌面貼圖上（materials.js 的 tex.table）
-    // 桌上的除顫器（defib.js）
+    // 桌上的除顫器（defib.js）：照原版放在右側桌緣、靠玩家這端，長邊跟右側桌框平行、緊貼桌框，
+    // 螢幕朝左對著桌子中央（機器本身不轉向玩家；看起來斜斜的是因為鏡頭從高處斜看），後面的管子與電線伸出桌外
     const { group: defib, screen } = WK.buildDefib();
     defibScreen = screen;
-    // 跟原版一樣放在右手邊桌緣、玩家這一半，後面的管子伸出桌外；螢幕斜斜朝向玩家與桌子中間
-    defib.position.set(0.98, 0, 0.2); defib.rotation.y = -0.95; defib.scale.setScalar(1.15);
+    defib.scale.setScalar(1.15);
+    defib.rotation.y = -PI / 2;
+    defib.position.set(TB.x - 0.1 * 1.15 - 0.025, 0, -0.06);
     scene.add(defib);
     defibBox = defib;
     // 椅背
-    const chair = mesh(new T.BoxGeometry(0.62, 1.1, 0.06), std(0x1a1310, { roughness: 0.8 }));
+    const chair = mesh(new T.BoxGeometry(0.62, 1.1, 0.06), std(0x060404, { roughness: 0.9 }));
     chair.position.set(0, 0.25, -1.45); scene.add(chair);
     return { defibScreen, defibBox };
   }
 
   function slotPos(side, i) {
+    const TB = WK.TABLE;
     const col = i % 2, row = Math.floor((i % 4) / 2), right = i >= 4;
-    const x = (right ? 1 : -1) * (0.46 + col * 0.17);
-    const z = side === 'player' ? 0.32 + row * 0.17 : -0.34 - row * 0.17;
+    const x = (right ? 1 : -1) * (TB.slotX + col * TB.cw);
+    const z = TB.rows[side === 'player' ? 'player' : 'dealer'][row];
     return V(x, 0, z);
   }
 
@@ -4377,16 +4514,17 @@ const WK = (() => {
   //          veil 戴面紗（head.js）
   const CHARS = {
     dealer: {
-      tint: 0xffffff, rough: 0.5, hair: 'none', eyes: 'dark', glow: 0xfff4d0, outfit: 'suit',
+      // 原版的莊家：蒼白像面具的大臉（scene.js 把頭放大 headScale 倍）、黑色深陷的眼窩（不發光）、咧開露出整排牙齒的大嘴
+      tint: 0xffffff, rough: 0.5, hair: 'none', eyes: 'dark', glow: 0x000000, eyeGlow: 0, headScale: 1.5, outfit: 'suit',
       head: {
         face: { hollow: 0.9, temple: 0.8, cheek: 1.1, jawW: 0.077 },
         eye: { deep: 1.1 },
         nose: { tipR: 0.0155, tipZ: 0.21, w: 0.019 },
-        mouth: { w: 0.064, curve: 0.012, open: 0.015, up: 0.006, lo: 0.0072 },
+        mouth: { w: 0.07, curve: 0.016, open: 0.02, up: 0.006, lo: 0.0072 },
         ear: { s: 1.08, out: 0.5 },
         neck: { r: 0.05, adam: 1, tendon: 1.1 },
       },
-      paint: { base: [178, 168, 146], lip: [110, 45, 40], blood: true, tears: false, wrinkle: 1, stubble: 0 },
+      paint: { base: [196, 186, 166], lip: [110, 45, 40], blood: true, tears: false, wrinkle: 1, stubble: 0, sockets: 0.95 },
       teeth: { missing: [-4, 2, 5], color: 0xd8cca2 },
       body: { w: 1, d: 1, belly: 0, chest: 0, shoulder: 1, arm: 1 },
       persona: { face: { smile: 0.15 }, bend: 0, chin: 0, fidget: 'tap', tell: { live: [1.4, 0.5, 0.02, 0.35, 0] } },
@@ -4851,8 +4989,9 @@ const WK = (() => {
     const [fc, gc] = cvs(F.w, F.h), [fh, gh] = cvs(F.w, F.h);
     fill(gc, F, 140); hfill(gh, F);
     const eyes = [1, -1].map(sx => [sx * e.x, e.y]);
-    // 黑眼圈、眼窩的暗沉、眼袋
+    // 黑眼圈、眼窩的暗沉、眼袋；sockets（莊家）：整個眼窩塗黑，像面具上兩個深洞
     for (const [ex, ey] of eyes) {
+      if (P.sockets) { blot(gc, ex, ey, e.r * 2.6, `rgba(4,2,2,${P.sockets})`, 0.9); blot(gh, ex, ey, e.r * 2.2, `rgba(0,0,0,${0.5 * P.sockets})`, 0.6); }
       blot(gc, ex, ey - 0.004, e.r * 2.0, 'rgba(48,30,44,0.75)', 0.8);
       blot(gc, ex, ey - e.r * 0.9, e.r * 1.3, 'rgba(60,34,40,0.45)', 0.55);
       const sx = Math.sign(ex);
@@ -5290,14 +5429,14 @@ normal = headPerturb(-vViewPosition, normal, dH * uBump * 4.0, faceDirection);`)
     skin.bind(new T.Skeleton(bones, rest.map(m => m.clone().invert())), new T.Matrix4());
     // 眼球（可以轉，看向鏡頭）與發光的瞳孔
     const e = H.eye, eyes = [], glows = [];
-    const ballMat = new T.MeshPhysicalMaterial({ map: eyeTex.map, emissive: 0xfff4d8, emissiveMap: eyeTex.emissive, emissiveIntensity: 1.6, roughness: 0.25, clearcoat: 0.8, clearcoatRoughness: 0.08, envMap: env.tex, envMapIntensity: 0.5 });
+    const ballMat = new T.MeshPhysicalMaterial({ map: eyeTex.map, emissive: 0xfff4d8, emissiveMap: eyeTex.emissive, emissiveIntensity: spec.eyeGlow ?? 1.6, roughness: 0.25, clearcoat: 0.8, clearcoatRoughness: 0.08, envMap: env.tex, envMapIntensity: 0.5 });
     for (const fr of e.frames) {
       const g = new T.Group();
       g.position.copy(fr.c);
       const ball = new T.Mesh(new T.SphereGeometry(e.r * 0.985, 32, 20).rotateX(PI / 2), ballMat);
       g.add(ball);
       bones[B.head].add(g);
-      const glow = new T.Sprite(new T.SpriteMaterial({ map: tex.glow, color: spec.glow || 0xfff4d0, blending: T.AdditiveBlending, depthWrite: false, transparent: true }));
+      const glow = new T.Sprite(new T.SpriteMaterial({ map: tex.glow, color: spec.glow ?? 0xfff4d0, blending: T.AdditiveBlending, depthWrite: false, transparent: true }));
       glow.scale.set(0.036, 0.036, 1);
       glow.position.set(0, 0, e.r + 0.005);
       g.add(glow);
@@ -6318,11 +6457,94 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
   // 鋸子握把圓棒的中心（道具座標，平放時）
   const SAW_GRIP = { x: -0.066, y: 0.0105 };
 
+  // ---------- 貼圖（道具上印的字、刻度、刮痕、髒污；品牌都是自創的） ----------
+  // 每種只畫一次；材質每個道具自己一份（滑鼠移上去會改發光色）
+  const R = WK.R;
+  const LT = {};
+  const lt = (key, w, h, draw) => LT[key] || (LT[key] = WK.canvasTex(w, h, draw));
+  const dirt = (g, w, h, n = 30, c = 'rgba(60,35,20,.25)') => { for (let i = 0; i < n; i++) WK.blot(g, R(0, w), R(0, h), R(3, w / 8), c); };
+  const scratches = (g, w, h, n = 40, c = 'rgba(230,220,200,.35)') => {
+    g.lineWidth = 1;
+    for (let i = 0; i < n; i++) { g.strokeStyle = c; const x = R(0, w), y = R(0, h), a = R(0, PI); g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * R(4, 24), y + Math.sin(a) * R(4, 24)); g.stroke(); }
+  };
+  const text = (g, str, x, y, px, color, align = 'center') => {
+    g.fillStyle = color; g.textAlign = align; g.textBaseline = 'middle';
+    g.font = `${px}px Cubic11, "Microsoft JhengHei", monospace`; g.fillText(str, x, y);
+  };
+  const TX = {
+    // 磨損的金屬（手銬、放大鏡框、刀片）
+    metal: () => lt('metal', 256, 256, (g, w, h) => { g.fillStyle = '#8c8a86'; g.fillRect(0, 0, w, h); dirt(g, w, h, 40, 'rgba(40,30,25,.3)'); dirt(g, w, h, 10, 'rgba(120,60,30,.3)'); scratches(g, w, h, 80); }),
+    // 子彈的塑膠殼：直紋、印字（紅＝實彈、灰藍＝空包彈）
+    hull: live => lt('hull' + live, 256, 256, (g, w, h) => {
+      g.fillStyle = live ? '#b02a20' : '#5e6e86'; g.fillRect(0, 0, w, h);
+      for (let x = 0; x < w; x += 8) { g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x, 0, 3, h); }
+      text(g, '12 GA', w * 0.25, h * 0.5, 36, 'rgba(240,230,210,.55)');
+      text(g, '12 GA', w * 0.75, h * 0.5, 36, 'rgba(240,230,210,.55)');
+      dirt(g, w, h, 20);
+    }),
+    // 香菸盒：米白底、紅色帶、自創牌子 KRAAL、警告字
+    cigBox: () => lt('cigBox', 256, 256, (g, w, h) => {
+      g.fillStyle = '#d8d0b8'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#8c1c16'; g.fillRect(0, h * 0.05, w, h * 0.22);
+      text(g, 'KRAAL', w / 2, h * 0.45, 48, '#2a1a12');
+      text(g, 'FILTER 20', w / 2, h * 0.6, 24, '#8c1c16');
+      g.fillStyle = '#1a1410'; g.fillRect(w * 0.08, h * 0.74, w * 0.84, h * 0.18);
+      text(g, '吸菸有害健康', w / 2, h * 0.83, 24, '#e8e0cc');
+      dirt(g, w, h, 30); scratches(g, w, h, 20, 'rgba(255,255,255,.2)');
+    }),
+    // 啤酒罐身：深綠、金色標籤、自創牌子 OXBOW
+    beer: () => lt('beer', 512, 256, (g, w, h) => {
+      g.fillStyle = '#2c4a30'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#c8b070'; g.fillRect(0, h * 0.32, w, h * 0.36);
+      for (const x of [w * 0.25, w * 0.75]) { text(g, 'OXBOW', x, h * 0.45, 52, '#2a1a10'); text(g, 'LAGER 500ml', x, h * 0.6, 22, '#5a3018'); }
+      g.fillStyle = '#e8dcb0'; g.fillRect(0, h * 0.12, w, 4); g.fillRect(0, h * 0.86, w, 4);
+      dirt(g, w, h, 30); scratches(g, w, h, 60, 'rgba(255,250,230,.4)');
+    }),
+    // 藥瓶標籤：褪色的米白、字、過期日期
+    med: () => lt('med', 512, 256, (g, w, h) => {
+      g.fillStyle = '#d4caa8'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#5a7a6a'; g.fillRect(0, 0, w, h * 0.22);
+      for (const x of [w * 0.25, w * 0.75]) { text(g, 'PALMOX', x, h * 0.42, 40, '#2a2620'); text(g, '50 mg ×30', x, h * 0.6, 22, '#4a443a'); text(g, 'EXP 03/89', x, h * 0.78, 22, '#8c2a20'); }
+      dirt(g, w, h, 50, 'rgba(120,90,40,.3)');
+    }),
+    // 針筒刻度
+    syringe: () => lt('syr', 256, 64, (g, w, h) => {
+      g.fillStyle = '#e4e0d4'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#2a2a2a';
+      for (let i = 0; i <= 20; i++) g.fillRect(20 + i * 10.8, 0, 2, i % 5 ? 16 : 30);
+      text(g, 'mL', 236, 46, 16, '#2a2a2a');
+      dirt(g, w, h, 10);
+    }),
+    // 手機正面：小螢幕（訊號、時間）、數字鍵
+    phone: () => lt('phone', 128, 256, (g, w, h) => {
+      g.fillStyle = '#232527'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#6a8a5a'; g.fillRect(18, 22, w - 36, 70);
+      g.fillStyle = '#1e2a18'; for (let i = 0; i < 4; i++) g.fillRect(24 + i * 6, 70 - i * 8, 4, 12 + i * 8);
+      text(g, '12:00', w / 2 + 12, 46, 16, '#1e2a18');
+      ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].forEach((k, i) => {
+        const x = 22 + (i % 3) * 30, y = 118 + Math.floor(i / 3) * 32;
+        g.fillStyle = '#8b8f92'; g.fillRect(x, y, 24, 22); text(g, k, x + 12, y + 12, 16, '#1a1a1a');
+      });
+      dirt(g, w, h, 12, 'rgba(255,255,255,.06)');
+    }),
+    // 反轉器的面板：＋／－與箭頭
+    inv: () => lt('inv', 256, 128, (g, w, h) => {
+      g.fillStyle = '#3a3f38'; g.fillRect(0, 0, w, h);
+      text(g, '+', w * 0.2, h * 0.5, 48, '#d8d0b8'); text(g, '-', w * 0.8, h * 0.5, 48, '#d8d0b8');
+      text(g, '<>', w * 0.5, h * 0.8, 24, '#d8d0b8');
+      dirt(g, w, h, 20); scratches(g, w, h, 30);
+    }),
+    // 握把（黑色塑膠、防滑紋）
+    grip: () => lt('grip', 128, 128, (g, w, h) => { g.fillStyle = '#1e1a16'; g.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 8) { g.fillStyle = '#3a342c'; g.fillRect(0, y, w, 3); } dirt(g, w, h, 10); }),
+  };
+
   function makeShell(live, spent = false) {
     const g = new T.Group();
-    const col = live ? (spent ? 0x5e1612 : 0xb3251c) : (spent ? 0x18305c : 0x2a52a0);
-    const body = mesh(new T.CylinderGeometry(0.0105, 0.0105, spent ? 0.046 : 0.05, 16), std(col, { roughness: 0.5 }));
+    const hull = std(0xffffff, { map: TX.hull(live), roughness: 0.55, color: spent ? 0x6a6a6a : 0xffffff });
+    const body = mesh(new T.CylinderGeometry(0.0105, 0.0105, spent ? 0.046 : 0.05, 16), hull);
     body.position.y = 0.017 + (spent ? 0.023 : 0.025);
+    // 頂端的摺口（沒擊發的才有）
+    if (!spent) { const crimp = mesh(new T.ConeGeometry(0.0105, 0.004, 8), std(live ? 0x7a1a14 : 0x3e4a5c, { roughness: 0.6 })); crimp.position.y = 0.017 + 0.05 + 0.002; g.add(crimp); }
     const base = mesh(new T.CylinderGeometry(0.011, 0.011, 0.017, 16), M.brass);
     base.position.y = 0.0085 + 0.0015;
     const rim = mesh(new T.CylinderGeometry(0.0125, 0.0125, 0.003, 16), M.brass);
@@ -6333,75 +6555,113 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
   }
 
   // ---------- 道具 ----------
+  // 外形尺寸（莊家的握法、碰撞都量過）不變，只加細節：零件、印字、刻度、刮痕、髒污
   function buildItem(id) {
     const g = new T.Group();
-    const add = (geo, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => {
+    const add = (geo, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, parent = g) => {
       const m = mesh(geo, mat);
       m.position.set(x, y, z); m.rotation.set(rx, ry, rz);
-      g.add(m);
+      parent.add(m);
       return m;
     };
     const B = (w, h, d) => new T.BoxGeometry(w, h, d);
-    const C = (r1, r2, h, s = 20) => new T.CylinderGeometry(r1, r2, h, s);
-    const metal = std(0x9a9ea2, { metalness: 0.85, roughness: 0.3, envMap: env.tex });
+    const C = (r1, r2, h, s = 20, open = false) => new T.CylinderGeometry(r1, r2, h, s, 1, open);
+    const metal = std(0xffffff, { map: TX.metal(), metalness: 0.85, roughness: 0.35, envMap: env.tex });
     switch (id) {
-      case 'magnifier':
+      case 'magnifier': {
         add(new T.TorusGeometry(0.034, 0.006, 10, 32), metal, 0, 0.007, 0, PI / 2);
-        add(C(0.033, 0.033, 0.004, 32), std(0xa8d0c8, { transparent: true, opacity: 0.35, roughness: 0.05, metalness: 0.2, envMap: env.tex }), 0, 0.007, 0);
-        add(C(0.008, 0.01, 0.075), std(0x2a1a10, { roughness: 0.5 }), 0.075, 0.009, 0.0, 0, 0, PI / 2);
+        // 鏡片：有反光的玻璃
+        add(C(0.033, 0.033, 0.004, 32), std(0xb8dcd4, { transparent: true, opacity: 0.4, roughness: 0.02, metalness: 0.3, envMap: env.tex, envMapIntensity: 2 }), 0, 0.007, 0);
+        add(C(0.008, 0.01, 0.075), std(0xffffff, { map: TX.grip(), roughness: 0.6 }), 0.075, 0.009, 0.0, 0, 0, PI / 2);
         add(C(0.01, 0.01, 0.012), metal, 0.04, 0.009, 0, 0, 0, PI / 2);
+        add(C(0.0105, 0.0085, 0.006), metal, 0.115, 0.009, 0, 0, 0, PI / 2);
         break;
-      case 'cigarettes':
-        add(B(0.056, 0.08, 0.024), std(0xcfc8b4), 0, 0.04, 0);
-        add(B(0.057, 0.022, 0.025), std(0x8b1d18), 0, 0.071, 0);
-        add(C(0.0045, 0.0045, 0.03, 10), std(0xefe9da), -0.012, 0.09, 0);
-        add(C(0.0046, 0.0046, 0.01, 10), std(0xc06a2a), 0.006, 0.084, 0);
-        add(C(0.0045, 0.0045, 0.022, 10), std(0xefe9da), 0.006, 0.096, 0);
+      }
+      case 'cigarettes': {
+        add(B(0.056, 0.064, 0.024), std(0xffffff, { map: TX.cigBox(), roughness: 0.7 }), 0, 0.032, 0);
+        // 翻蓋：往後掀開，露出三根菸
+        const lid = new T.Group(); lid.position.set(0, 0.064, -0.012); lid.rotation.x = -1.9; g.add(lid);
+        const red = std(0x8c1c16, { roughness: 0.6 });
+        add(B(0.057, 0.0015, 0.025), red, 0, 0, 0.0125, 0, 0, 0, lid);
+        add(B(0.057, 0.016, 0.0015), red, 0, -0.008, 0.025, 0, 0, 0, lid);
+        const paper = std(0xefe9da, { roughness: 0.8 }), filt = std(0xc06a2a, { roughness: 0.7 });
+        for (const [x, hgt] of [[-0.014, 0.022], [0.0, 0.014], [0.014, 0.018]]) {
+          add(C(0.0045, 0.0045, 0.012, 10), filt, x, 0.064 + hgt - 0.006, 0.002);
+          add(C(0.0045, 0.0045, 0.03, 10), paper, x, 0.064 + hgt - 0.027, 0.002);
+        }
         break;
-      case 'beer':
-        add(C(0.026, 0.026, 0.095, 28), std(0x2f4a33, { metalness: 0.6, roughness: 0.3, envMap: env.tex }), 0, 0.0475, 0);
-        add(C(0.0263, 0.0263, 0.038, 28), std(0xc5ae6f, { roughness: 0.5 }), 0, 0.05, 0);
-        add(C(0.021, 0.026, 0.008, 28), metal, 0, 0.099, 0);
+      }
+      case 'beer': {
+        add(C(0.026, 0.026, 0.088, 28), std(0xffffff, { map: TX.beer(), metalness: 0.5, roughness: 0.35, envMap: env.tex }), 0, 0.048, 0);
+        // 罐底收窄、罐頂凹下去、拉環
+        add(C(0.026, 0.022, 0.006, 28), metal, 0, 0.002, 0);
+        add(C(0.021, 0.026, 0.006, 28, true), metal, 0, 0.095, 0);
+        add(C(0.0205, 0.0205, 0.002, 28), metal, 0, 0.0955, 0);
+        add(new T.TorusGeometry(0.0205, 0.0015, 6, 28), metal, 0, 0.098, 0, PI / 2);
+        add(B(0.006, 0.0012, 0.016), metal, 0, 0.0975, 0.004);
+        add(new T.TorusGeometry(0.004, 0.0012, 6, 12), metal, 0, 0.0978, 0.013, PI / 2);
         break;
+      }
       case 'saw': {
         // 刀片在前（+x），刀背在 +z、鋸齒在 -z；握把是跟刀片垂直的圓棒（像手槍握把），上端用一塊木頭接到刀背，
         // 握把前面留空給手指繞過去
-        const s = new T.Shape();
-        s.moveTo(0, 0.02); s.lineTo(0.16, 0.012);
-        for (let x = 0.16; x > 0; x -= 0.01) { s.lineTo(x - 0.005, -0.03); s.lineTo(x - 0.01, -0.022); }
-        s.lineTo(0, -0.022);
-        const geo = new T.ExtrudeGeometry(s, { depth: 0.002, bevelEnabled: false });
+        const sh = new T.Shape();
+        sh.moveTo(0, 0.02); sh.lineTo(0.16, 0.012);
+        for (let x = 0.16; x > 0; x -= 0.01) { sh.lineTo(x - 0.005, -0.03); sh.lineTo(x - 0.01, -0.022); }
+        sh.lineTo(0, -0.022);
+        const geo = new T.ExtrudeGeometry(sh, { depth: 0.002, bevelEnabled: false });
+        const p = geo.attributes.position, uv = geo.attributes.uv;
+        for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) * 6, p.getY(i) * 6 + 0.5);
         add(geo, metal, -0.02, 0.005, 0, PI / 2);
-        const wood = std(0x6b3a1c, { roughness: 0.55 });
+        const wood = std(0xc08060, { map: tex.wood, roughness: 0.55 });
         add(C(0.0105, 0.0105, 0.062, 16), wood, SAW_GRIP.x, SAW_GRIP.y, -0.006, PI / 2);
         add(B(0.07, 0.016, 0.016), wood, -0.047, SAW_GRIP.y, 0.024);
         add(C(0.0115, 0.0115, 0.006, 16), std(0x120c08), SAW_GRIP.x, SAW_GRIP.y, -0.038, PI / 2);
+        // 鉚釘
+        for (const x of [-0.03, -0.018]) add(C(0.003, 0.003, 0.018, 8), M.brass, x, SAW_GRIP.y, 0.024);
         break;
       }
       case 'handcuffs':
-        for (const x of [-0.034, 0.034]) add(new T.TorusGeometry(0.024, 0.0055, 10, 28), metal, x, 0.006, 0, PI / 2);
+        // 兩個環（各帶一個鎖頭；鎖頭是環的子物件，扣上時跟著環走），中間三節鏈子
+        for (const x of [-0.034, 0.034]) {
+          const ring = add(new T.TorusGeometry(0.024, 0.0055, 10, 28), metal, x, 0.006, 0, PI / 2);
+          const lock = mesh(B(0.016, 0.022, 0.009), metal);
+          lock.position.set(x < 0 ? -0.026 : 0.026, 0, 0); ring.add(lock);
+        }
         for (const x of [-0.009, 0.0, 0.009]) add(new T.TorusGeometry(0.006, 0.0018, 6, 12), metal, x, 0.006, 0, x === 0 ? 0 : PI / 2);
         break;
-      case 'phone':
+      case 'phone': {
         add(B(0.046, 0.016, 0.095), std(0x232527, { roughness: 0.45 }), 0, 0.008, 0);
-        add(B(0.034, 0.001, 0.03), new T.MeshBasicMaterial({ color: 0x4f8a50 }), 0, 0.0166, -0.025);
-        for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) add(B(0.008, 0.002, 0.006), std(0x8b8f92), -0.012 + c * 0.012, 0.017, 0.006 + r * 0.01);
+        // 正面：小螢幕＋數字鍵印在一張貼圖上
+        add(new T.PlaneGeometry(0.044, 0.093), std(0xffffff, { map: TX.phone(), roughness: 0.5 }), 0, 0.0162, 0, -PI / 2);
         add(C(0.003, 0.003, 0.03, 8), std(0x1a1a1a), 0.016, 0.008, -0.06, PI / 2);
         break;
-      case 'inverter':
+      }
+      case 'inverter': {
         add(B(0.075, 0.035, 0.05), std(0x3a3f38, { roughness: 0.5 }), 0, 0.0175, 0);
-        add(C(0.009, 0.009, 0.008), std(0xb3251c, { roughness: 0.4 }), -0.018, 0.039, 0);
-        add(C(0.009, 0.009, 0.008), std(0x2a52a0, { roughness: 0.4 }), 0.018, 0.039, 0);
+        add(new T.PlaneGeometry(0.073, 0.048), std(0xffffff, { map: TX.inv(), roughness: 0.5 }), 0, 0.0352, 0, -PI / 2);
+        // 切換開關（撥桿）與兩顆指示燈
+        add(C(0.007, 0.008, 0.004), metal, 0, 0.037, -0.006);
+        add(C(0.0018, 0.0022, 0.016, 8), metal, 0.004, 0.044, -0.006, 0, 0, -0.5);
+        add(new T.SphereGeometry(0.0035, 8, 6), std(0xff3020, { emissive: 0x801008, roughness: 0.3 }), -0.024, 0.036, 0.014);
+        add(new T.SphereGeometry(0.0035, 8, 6), std(0x40ff60, { emissive: 0x0a3010, roughness: 0.3 }), 0.024, 0.036, 0.014);
         break;
-      case 'adrenaline':
-        add(C(0.009, 0.009, 0.11), std(0xd9d4c3, { roughness: 0.4 }), 0, 0.009, 0, 0, 0, PI / 2);
-        add(C(0.0095, 0.0095, 0.04), std(0xd4a017, { roughness: 0.4 }), -0.01, 0.009, 0, 0, 0, PI / 2);
-        add(C(0.0105, 0.0105, 0.022), std(0xe07a1f, { roughness: 0.4 }), 0.062, 0.009, 0, 0, 0, PI / 2);
-        add(C(0.0012, 0.0012, 0.02, 6), metal, -0.065, 0.009, 0, 0, 0, PI / 2);
+      }
+      case 'adrenaline': {
+        // 針筒：透明針筒（刻度）、裡面的藥水、推桿與指壓片、針頭
+        add(C(0.009, 0.009, 0.075, 16), std(0xffffff, { map: TX.syringe(), transparent: true, opacity: 0.75, roughness: 0.15, envMap: env.tex }), 0, 0.009, 0, 0, 0, PI / 2);
+        add(C(0.0075, 0.0075, 0.05, 12), std(0xd4a017, { roughness: 0.3, emissive: 0x2a1800 }), -0.01, 0.009, 0, 0, 0, PI / 2);
+        const white = std(0xe0e0d8, { roughness: 0.5 });
+        add(C(0.0025, 0.0025, 0.03, 8), white, 0.05, 0.009, 0, 0, 0, PI / 2);
+        add(C(0.0105, 0.0105, 0.003, 16), white, 0.065, 0.009, 0, 0, 0, PI / 2);
+        add(C(0.012, 0.012, 0.003, 16), white, 0.037, 0.009, 0, 0, 0, PI / 2);
+        add(C(0.003, 0.0045, 0.008, 10), std(0xe07a1f, { roughness: 0.4 }), -0.041, 0.009, 0, 0, 0, PI / 2);
+        add(C(0.0008, 0.0008, 0.022, 6), metal, -0.056, 0.009, 0, 0, 0, PI / 2);
         break;
+      }
       case 'medicine':
-        add(C(0.021, 0.021, 0.06, 24), std(0xb8661e, { transparent: true, opacity: 0.88, roughness: 0.25, envMap: env.tex }), 0, 0.03, 0);
-        add(C(0.0213, 0.0213, 0.03, 24), std(0xe3dece), 0, 0.03, 0);
+        add(C(0.021, 0.021, 0.06, 24), std(0xb8661e, { transparent: true, opacity: 0.88, roughness: 0.2, envMap: env.tex }), 0, 0.03, 0);
+        add(C(0.0213, 0.0213, 0.03, 24, true), std(0xffffff, { map: TX.med(), roughness: 0.8 }), 0, 0.03, 0);
         add(C(0.023, 0.023, 0.018, 24), std(0xf0ece0, { roughness: 0.6 }), 0, 0.069, 0);
         break;
     }
@@ -6482,6 +6742,8 @@ const World = (() => {
     if (WK.Body.cache[charId]) { if (D.bodyInst?.built !== WK.Body.cache[charId]) attachBody(WK.Body.cache[charId]); }
     else WK.Body.get(charId, spec).then(built => { if (my === headToken) attachBody(built); });
     D.shoulder[0].x = -0.24 * b.shoulder; D.shoulder[1].x = 0.24 * b.shoulder;
+    // 原版的莊家是一張很大的面具臉：頭（連眼睛、牙齒、錨點）整個放大，手和身體不變
+    D.head.scale.setScalar(spec.headScale || 1);
     // 個性：平常的表情、姿勢、休息時兩手的位置、待機小動作
     D.persona = spec.persona || {};
     const rp = D.persona.rest || [[-0.27, 0, 0.42], [0.27, 0, 0.42]];
@@ -7326,6 +7588,9 @@ const World = (() => {
     gunBody = new T.Group();
     gun.add(gunBody);
     const wood = gm(M.wood), metal = gm(M.metal), dark = gm(M.metalDark), rubber = gm(M.rubber);
+    // 金屬部分（槍管、機匣、扳機護圈）用磨損的發藍黑鐵，木頭部分（槍托、護木）用有木紋的木頭
+    metal.map = tex.gunMetal; metal.color.setHex(0xb8b8bc); metal.roughness = 0.45;
+    dark.map = tex.gunMetal; dark.color.setHex(0x707074);
 
     const s = new T.Shape();
     s.moveTo(-0.46, 0.035);
@@ -7396,8 +7661,9 @@ const World = (() => {
 
   const e2q = (roll, yaw, pitch) => new T.Quaternion().setFromEuler(new T.Euler(roll, yaw, pitch, 'YXZ'));
   const POSE = {
-    rest: () => ({ pos: V(-0.06, 0.024, -0.02), quat: e2q(-PI / 2, 0.12, 0) }),
-    hover: () => ({ pos: V(-0.06, 0.06, -0.02), quat: e2q(-PI / 2 + 0.25, 0.12, 0) }),
+    // 桌子中間偏莊家那邊（中線與子彈框留給玩家這邊）
+    rest: () => ({ pos: V(-0.06, 0.024, -0.12), quat: e2q(-PI / 2, 0.06, 0) }),
+    hover: () => ({ pos: V(-0.06, 0.06, -0.12), quat: e2q(-PI / 2 + 0.25, 0.06, 0) }),
     lifted: () => ({ pos: V(0.16, 0.4, 0.74), quat: e2q(0.15, PI / 2 + 0.55, 0.12) }),
     aimDealer: () => ({ pos: V(0.11, 0.43, 0.68), quat: e2q(0, PI / 2 + 0.02, 0.14) }),
     aimSelf: () => ({ pos: V(0.0, 0.49, 0.32), quat: e2q(0, -PI / 2, 0.16) }),
@@ -7452,10 +7718,13 @@ const World = (() => {
   async function showShells(list) {
     tray.forEach(s => scene.remove(s));
     tray = [];
-    const n = list.length;
+    // 照原版排在桌面右側中段那排 8 格的框裡（materials.js 的 TABLE.shellBox），一格一發、橫躺、黃銅底座朝玩家
+    const SB = WK.TABLE.shellBox, LIE = 0.0125 * 1.25;
     list.forEach((v, i) => {
       const s = makeShell(v);
-      s.position.set((i - (n - 1) / 2) * 0.065, 0.3, 0.17);
+      s.rotation.x = -PI / 2;
+      s.scale.setScalar(1.25);
+      s.position.set(SB.x0 + (i + 0.5) * SB.cell, 0.3, (SB.z0 + SB.z1) / 2 + 0.042);
       s.visible = false;
       scene.add(s);
       tray.push(s);
@@ -7463,7 +7732,7 @@ const World = (() => {
     for (const s of tray) {
       s.visible = true;
       SFX.play('drop');
-      anim(0.35, t => { s.position.y = 0.3 * (1 - t); }, 'back');
+      anim(0.35, t => { s.position.y = LIE + (0.3 - LIE) * (1 - t); }, 'back');
       await wait(0.11);
     }
     await wait(0.35);
@@ -7477,7 +7746,7 @@ const World = (() => {
         s.position.lerpVectors(from, to, t);
         s.position.y += Math.sin(t * PI) * 0.12;
         s.rotation.z = t * PI / 2;
-        s.scale.setScalar(1.4 * (1 - t * 0.5));
+        s.scale.setScalar(1.25 * (1 - t * 0.5));
         if (t >= 1) scene.remove(s);
       }, 'inOut');
       await wait(0.22);
@@ -7491,7 +7760,7 @@ const World = (() => {
     s.position.copy(tmp2);
     scene.add(s);
     spent.push(s);
-    const from = tmp2.clone(), to = V(R(-0.36, -0.12), 0.016, R(0.08, 0.22));
+    const from = tmp2.clone(), to = V(R(-0.14, 0.08), 0.016, R(-0.03, 0.07));
     const ry = R(0, PI * 2), spin = PI / 2 + PI * 4;
     anim(0.7, t => {
       s.position.lerpVectors(from, to, t);
@@ -8155,8 +8424,9 @@ const World = (() => {
 
   // ---------- 畫質 ----------
   const QUALITY = {
-    low: { pr: 0.75, shadow: false, map: 512 },
-    mid: { pr: 1, shadow: true, map: 1024 },
+    // pr：畫布用裝置像素（後製是整數倍放大，畫布不能再被瀏覽器縮放，不然像素邊緣會糊）；真正的算圖解析度看 RETRO_H
+    low: { pr: 2, shadow: false, map: 512 },
+    mid: { pr: 2, shadow: true, map: 1024 },
     high: { pr: 2, shadow: true, map: 2048 },
   };
   let quality = 'high';
@@ -8315,7 +8585,7 @@ const World = (() => {
 
   let previewing = false;
   const PREVIEW_CAM = { pos: [-0.12, 0.84, -0.3], look: [0.14, 0.76, -1.15], fov: 38 };
-  let lampBase = 2.7, lampDim = 1;
+  let lampBase = 1.1, lampDim = 1;
   async function lampOff(dur) {
     lampDim = 0;
     await wait(dur);
@@ -8328,7 +8598,7 @@ const World = (() => {
   function setPower(cut) {
     powerCut = cut;
     lampTint.set(cut ? 0xff9a80 : 0xffffff);
-    lampBase = cut ? 1.9 : 2.7;
+    lampBase = cut ? 0.8 : 1.1;
     lampDim = 1;
     spot.color.setHex(0xfff0d0).multiply(lampTint);
     lampBulb.userData.halo.material.color.setHex(0xffe8b0).multiply(lampTint);
@@ -8404,7 +8674,9 @@ const World = (() => {
 
   // ---------- 運鏡 ----------
   const CAM = {
-    seat: { pos: [0, 0.8, 1.32], look: [0, 0.06, -0.42], fov: 58 },
+    // 預設視角（照原版開場）：從玩家這端的低處、很廣的視角往前看整張長桌，莊家在遠端中央，
+    // 上面看得到兩盞舞台燈、燈架與垂掛的電線，左右看得到兩側的器材；每個鏡頭演完都回到這裡
+    seat: { pos: [0, 0.46, 0.66], look: [0, 0.06, -1.34], fov: 90 },
     title: { pos: [0.95, 1.05, 1.5], look: [0, 0.45, -0.95], fov: 42 },
     high: { pos: [0, 2.05, 0.55], look: [0, 0, -0.3], fov: 62 },
     shells: { pos: [0, 0.6, 0.72], look: [0, 0.02, 0.1], fov: 46 },
@@ -8526,6 +8798,7 @@ const World = (() => {
     spot.intensity = lampBase * lampDim * flick;
     if (WK.propLights) for (const l of WK.propLights) l.intensity = l.userData.base * lampDim * flick;
     lampBulb.material.color.copy(lampTint).multiplyScalar(lampDim * flick);
+    if (WK.stageLens) WK.stageLens.color.setHex(0x5a3426).multiply(lampTint).multiplyScalar(0.25 + 0.75 * lampDim * flick);
     lampBulb.userData.halo.material.opacity = 0.8 * lampDim * flick;
     // 很淡：畫面會被壓成少少幾階顏色，太亮的光錐會變成一大片抖色的灰（原版也看不到光錐）
     lightCone.material.opacity = 0.009 * lampDim * flick;
@@ -8557,18 +8830,19 @@ const World = (() => {
     draw();
   }
 
-  // ---------- 復古畫面：照原版用很低的解析度算圖，再用有序抖色壓成少少幾階顏色、放大成像素 ----------
-  // 場景先畫進半精度的小畫布（線性、還沒色調映射），最後一張全螢幕方塊做色調映射、偏暖的調色、
-  // 4×4 Bayer 抖色與每色 RETRO_LEVELS 階的量化；放大用最近點取樣，像素才是方的
-  const RETRO_H = { low: 200, mid: 230, high: 260 }, RETRO_LEVELS = 9;
+  // ---------- 復古畫面：照原版用低解析度算圖，再用有序抖色壓成少少幾階顏色、整數倍放大成像素 ----------
+  // 場景先畫進半精度的小畫布（線性、還沒色調映射），最後一張全螢幕方塊做色調映射、調色、
+  // 4×4 Bayer 抖色與每色 RETRO_LEVELS 階的量化。小畫布的一個像素在螢幕上剛好是 k×k 個裝置像素（k 是整數），
+  // 邊緣才銳利；k 由畫質的目標高度 RETRO_H 決定（至少 2）。抖色只用一半強度，而且在輪廓、白線這種明暗跳很大的地方關掉
+  const RETRO_H = { low: 420, mid: 480, high: 540 }, RETRO_LEVELS = 9;
   let rt = null, post = null;
   function buildPost() {
     rt = new T.WebGLRenderTarget(4, 4, { type: T.HalfFloatType, minFilter: T.NearestFilter, magFilter: T.NearestFilter });
     const mat = new T.ShaderMaterial({
-      uniforms: { tex: { value: rt.texture }, size: { value: new T.Vector2(4, 4) }, exposure: { value: 1 }, levels: { value: RETRO_LEVELS } },
-      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      uniforms: { tex: { value: rt.texture }, size: { value: new T.Vector2(4, 4) }, k: { value: 2 }, exposure: { value: 1 }, levels: { value: RETRO_LEVELS } },
+      vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: `
-        uniform sampler2D tex; uniform vec2 size; uniform float exposure, levels; varying vec2 vUv;
+        uniform sampler2D tex; uniform vec2 size; uniform float k, exposure, levels;
         // 跟 three.js 的 ACESFilmicToneMapping 一樣
         vec3 rrt(vec3 v) { vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
         vec3 aces(vec3 c) {
@@ -8580,13 +8854,27 @@ const World = (() => {
         vec3 toSRGB(vec3 c) { return mix(pow(c, vec3(1.0 / 2.4)) * 1.055 - 0.055, c * 12.92, step(c, vec3(0.0031308))); }
         float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
         float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
-        void main() {
-          vec3 c = toSRGB(aces(texture2D(tex, vUv).rgb));
-          // 調色：降一點飽和、整體偏紅褐（原版是褐紅＋橄欖綠）；暗部不墊高，黑的地方才不會變成一片抖色的灰
+        // 調色（原版：暗紅褐的磚與鏽、橄欖綠的桌布、米白的線）：
+        // 暗部壓成純黑、S 曲線拉對比、飽和度略降；暗部偏紅褐、亮部偏米白
+        vec3 grade(vec2 p) {
+          vec3 c = toSRGB(aces(texture2D(tex, (p + 0.5) / size).rgb));
+          c = clamp((c - 0.045) / 0.94, 0.0, 1.0);
+          c = mix(c, c * c * (3.0 - 2.0 * c), 0.45);
           float l = dot(c, vec3(0.299, 0.587, 0.114));
-          c = mix(vec3(l), c, 0.82) * vec3(1.04, 0.95, 0.88);
-          vec2 p = floor(vUv * size);
-          c = floor(c * (levels - 1.0) + bayer4(p)) / (levels - 1.0);
+          c = mix(vec3(l), c, 0.62);
+          return c * mix(vec3(1.06, 0.93, 0.95), vec3(0.98, 0.97, 0.98), clamp(l * 1.6, 0.0, 1.0));
+        }
+        // 鄰格的明暗只比線性亮度的對數（便宜；不用每格都跑一次完整調色）
+        float ll(vec2 p) { return log2(dot(texture2D(tex, (p + 0.5) / size).rgb, vec3(0.299, 0.587, 0.114)) * exposure + 0.02); }
+        void main() {
+          vec2 p = floor(gl_FragCoord.xy / k);
+          vec3 c = grade(p);
+          // 明暗跳很大（輪廓、白線、字）的像素不抖色，平滑的漸層與暗部才抖
+          float l = ll(p);
+          float e = max(max(abs(ll(p + vec2(1.0, 0.0)) - l), abs(ll(p - vec2(1.0, 0.0)) - l)),
+                        max(abs(ll(p + vec2(0.0, 1.0)) - l), abs(ll(p - vec2(0.0, 1.0)) - l)));
+          float amt = 0.5 * (1.0 - smoothstep(0.35, 0.8, e));
+          c = floor(c * (levels - 1.0) + 0.5 + (bayer4(p) - 0.5) * amt) / (levels - 1.0);
           gl_FragColor = vec4(c, 1.0);
         }`,
       depthTest: false, depthWrite: false,
@@ -8598,8 +8886,10 @@ const World = (() => {
   }
   const retroSize = new T.Vector2();
   function draw() {
-    renderer.getSize(retroSize);
-    const H = RETRO_H[quality], W = Math.max(1, Math.round(H * retroSize.x / Math.max(1, retroSize.y)));
+    renderer.getDrawingBufferSize(retroSize);
+    const k = Math.max(2, Math.round(retroSize.y / RETRO_H[quality]));
+    const W = Math.max(1, Math.ceil(retroSize.x / k)), H = Math.max(1, Math.ceil(retroSize.y / k));
+    post.mat.uniforms.k.value = k;
     if (rt.width !== W || rt.height !== H) { rt.setSize(W, H); post.mat.uniforms.size.value.set(W, H); }
     renderer.setRenderTarget(rt);
     renderer.render(scene, camera);
@@ -8670,6 +8960,8 @@ const World = (() => {
       // 改了 head.js 之後重新雕（先在頁面裡重新執行 head.js）
       reloadHead() { for (const k in WK.Head.cache) delete WK.Head.cache[k]; setCharacter(charId); },
     },
+    // 暫停選單：主迴圈停在這一格（畫面照畫）
+    setPaused(on) { paused = on; },
     setOrbit(on) { orbit = on; },
     shake(a) { shake = Math.max(shake, a); },
     onPick(fn) { handlers.pick = fn; },
@@ -8724,6 +9016,7 @@ const UI = (() => {
   let typeToken = 0;
   let stealResolve = null;
   let aiming = false;
+  let aimTarget = null;    // 拿著槍時，槍口現在指著誰（'dealer'／'player'），開槍就打他
   let down = false;
   let eyeOpen = 1, eyeBlur = 0;
   let pace = 1;            // 演出速度（設定）
@@ -8752,9 +9045,22 @@ const UI = (() => {
     });
     fit();
     window.addEventListener('resize', fit);
-    startGrain();
     // 不是你能操作的時候，點畫面就跳過目前這句對話
     $('#gl').addEventListener('pointerdown', () => { if (!Game.canAct()) skip(); });
+    // 拿起槍之後：滑鼠往上指莊家、往下指自己，點一下開槍、右鍵放下；
+    // 手機沒有游標：點畫面上半（莊家的臉）或下半先把槍口轉過去，同一邊再點一下才開槍
+    const gl = $('#gl');
+    const sideAt = e => { const r = gl.getBoundingClientRect(); return (e.clientY - r.top) / r.height < 0.5 ? 'dealer' : 'player'; };
+    gl.addEventListener('pointermove', e => { if (aiming && e.pointerType === 'mouse') pointAt(sideAt(e)); });
+    gl.addEventListener('pointerup', e => {
+      if (!aiming) return;
+      if (e.button === 2) { closeAim(); return; }
+      if (e.button !== 0) return;
+      const t = sideAt(e);
+      if (e.pointerType === 'mouse' || aimTarget === t) fireAim(t);
+      else pointAt(t);
+    });
+    gl.addEventListener('contextmenu', e => { if (aiming) e.preventDefault(); });
   }
 
   // 濺到鏡頭上的血：幾種隨機的血點與往下流的痕跡，畫一次留著輪流用
@@ -8786,27 +9092,6 @@ const UI = (() => {
     flash('#fx-blood');
   }
 
-  // 動態底片顆粒
-  function startGrain() {
-    const c = $('#grain'), g = c.getContext('2d');
-    const img = g.createImageData(c.width, c.height);
-    let last = 0;
-    const draw = t => {
-      if (t - last > 70) {
-        last = t;
-        const d = img.data;
-        for (let i = 0; i < d.length; i += 4) {
-          const v = Math.random() * 255;
-          d[i] = d[i + 1] = d[i + 2] = v;
-          d[i + 3] = 255;
-        }
-        g.putImageData(img, 0, 0);
-      }
-      if (!reduce) requestAnimationFrame(draw);
-    };
-    requestAnimationFrame(draw);
-  }
-
   // ---------- 眼皮與模糊 ----------
   function applyEyes() {
     $('#lids').style.setProperty('--open', eyeOpen.toFixed(3));
@@ -8831,7 +9116,14 @@ const UI = (() => {
     if (line) line.done();
     return new Promise(res => {
       let i = 0, timer = 0, finished = false;
-      const done = () => { if (finished) return; finished = true; clearTimeout(timer); if (line && line.my === my) line = null; res(); };
+      // 字幕講完停一下就收起來（下一句來了就換掉）
+      const done = () => {
+        if (finished) return;
+        finished = true; clearTimeout(timer);
+        if (line && line.my === my) line = null;
+        setTimeout(() => { if (typeToken === my) el.textContent = ''; }, 1800 / pace);
+        res();
+      };
       const hold = () => { timer = setTimeout(done, 500 / pace); };
       const step = () => {
         if (my !== typeToken) return done();
@@ -8873,7 +9165,6 @@ const UI = (() => {
   function showSpeech(text) {
     const box = $('#speech'), el = box.querySelector('.txt'), my = ++speechToken;
     clearTimeout(speechTimer);
-    box.querySelector('.who').textContent = CHAR_NAME[Game.s.char] || '莊家';
     el.textContent = '';
     box.classList.add('on');
     let i = 0;
@@ -8894,7 +9185,6 @@ const UI = (() => {
     step();
   }
   function hideSpeech() { speechToken++; clearTimeout(speechTimer); $('#speech').classList.remove('on'); World.dealerTalk(null); }
-  const CHAR_NAME = { dealer: '莊家', widow: '寡婦', crone: '瘋婆' };
   // 道具 → 他用的時候講什麼
   const ITEM_LINE = { cigarettes: 'heal', saw: 'saw', handcuffs: 'cuff', magnifier: null, beer: 'beer', phone: 'phone', inverter: 'invert', adrenaline: 'steal', medicine: null };
   let lowSaid = { dealer: false, player: false };
@@ -8922,7 +9212,7 @@ const UI = (() => {
   function renderItems(s) { World.syncItems(s.items); }
 
   // 桌上除顫器螢幕要畫的東西
-  const defibState = (s, hp = s.hp) => ({ dealerName: Game.who('dealer'), playerName: s.name, dealer: hp.dealer, player: hp.player, max: s.max, cuffed: { dealer: !!s.cuffs.dealer, player: !!s.cuffs.player } });
+  const defibState = (s, hp = s.hp) => ({ dealerName: Game.who('dealer'), playerName: s.name, round: s.round, dealer: hp.dealer, player: hp.player, max: s.max, cuffed: { dealer: !!s.cuffs.dealer, player: !!s.cuffs.player } });
 
   // 中彈後：鏡頭帶到除顫器，被扣掉的閃電閃三下熄掉，再回到原本的鏡頭（你可能還舉著槍）
   async function drain(who, from, to) {
@@ -8945,17 +9235,7 @@ const UI = (() => {
   }
 
   function renderHP(s) {
-    const row = (who, label) => {
-      const el = $(`#m-${who}`);
-      el.querySelector('.mname').textContent = label;
-      el.querySelector('.bolts').innerHTML = Array.from({ length: s.max }, (_, i) =>
-        `<span class="${i < s.hp[who] ? 'on' : 'off'}">${Art.bolt}</span>`).join('');
-      el.querySelector('.mtag').textContent = s.cuffs[who] ? '[銬住]' : '';
-    };
-    row('dealer', s.mp ? s.opp : 'DEALER');
-    row('player', s.name);
-    $('#m-round').textContent = ROMAN[s.round];
-    $('#monitor').classList.toggle('cut', s.wiresCut);
+    // 電量只顯示在桌上那台除顫器的螢幕上
     World.setDefib(defibState(s));
     // 對面的心情：自己的血越少喘得越重，你的血越少笑得越開（雙人時表情也跟著電量走）
     World.dealerMood(s.hp.dealer / s.max, s.hp.player / s.max, s.hp.dealer);
@@ -8969,23 +9249,17 @@ const UI = (() => {
     else SFX.setHeart(low <= 1 ? 96 : 0, 0.9);
   }
 
+  // 暫停選單裡的情報：第幾局、槍裡還剩幾發（簡單模式是公開資訊、莊家也在數；困難模式只說總數）、看過的子彈
   function renderInfo(s) {
-    $('#round-label').textContent = `ROUND ${ROMAN[s.round]}`;
-    const turn = $('#turn');
-    turn.textContent = s.turn === 'player' ? '你的回合' : `${Game.who('dealer')}的回合`;
-    turn.classList.toggle('dealer', s.turn !== 'player');
-    const rows = [];
+    const rows = [`第 ${s.round} 局`];
+    const live = s.shells.filter(Boolean).length, blank = s.shells.length - live;
+    if (s.shells.length) rows.push(s.diff === 'hard' ? `槍內剩 ${s.shells.length} 發` : `槍內剩 <span class="live">${live} 實</span> · <span class="blank">${blank} 空</span>`);
     s.known.player.forEach((v, i) => {
       if (v === undefined) return;
-      rows.push(`<li><span>${i === 0 ? '目前這發' : `第 ${i + 1} 發`}</span><b class="${v ? 'live' : 'blank'}">${v ? '實彈 LIVE' : '空包 BLANK'}</b></li>`);
+      rows.push(`${i === 0 ? '目前這發' : `第 ${i + 1} 發`}：<span class="${v ? 'live' : 'blank'}">${v ? '實彈' : '空包彈'}</span>`);
     });
-    if (s.sawed) rows.push('<li><span>槍管</span><b class="live">已鋸短 ×2</b></li>');
-    $('#intel-list').innerHTML = rows.join('') || '<li class="none">還沒有任何情報</li>';
-    // 簡單模式：剩下幾發實彈／空包彈是公開資訊（莊家也在數），直接顯示出來；困難模式要自己記
-    const live = s.shells.filter(Boolean).length, blank = s.shells.length - live;
-    $('#shell-count').innerHTML = !s.shells.length ? ''
-      : s.diff === 'hard' ? `槍內剩 ${s.shells.length} 發`
-      : `剩 <span class="live">${live} 實</span>・<span class="blank">${blank} 空</span>`;
+    if (s.sawed) rows.push('槍管已鋸短（傷害 ×2）');
+    $('#pause-info').innerHTML = rows.join('<br>');
     World.setDealerCuffed(!!s.cuffs.dealer);
     renderHP(s);
   }
@@ -9003,16 +9277,18 @@ const UI = (() => {
 
   function hideAim() {
     aiming = false;
+    aimTarget = null;
     $('#stage').classList.remove('aiming');
   }
+  // 拿起槍：槍舉起來，接著移動滑鼠（或方向鍵）讓槍口指向莊家或自己
   function openAim() {
     aiming = true;
+    aimTarget = null;
     $('#stage').classList.add('aiming');
     World.setInteractive(false);
     World.gunTo('lifted', 0.7);
     World.cam('lifted', 0.8);
     SFX.play('pickup');
-    $('#aim-dealer').focus({ preventScroll: true });
   }
   function closeAim() {
     hideAim();
@@ -9025,6 +9301,17 @@ const UI = (() => {
     if (!aiming) return;
     World.gunTo(target === 'dealer' ? 'aimDealer' : 'aimSelf', 0.6);
     World.cam(target === 'dealer' ? 'aimDealer' : 'aimSelf', 0.7);
+  }
+  // 槍口轉向 target（已經指著就不動）
+  function pointAt(target) {
+    if (!aiming || aimTarget === target) return;
+    aimTarget = target;
+    previewAim(target);
+  }
+  // 開槍：沒給 target 就打現在指著的人
+  function fireAim(target = aimTarget) {
+    if (!aiming || !target || !Game.canAct()) return;
+    Game.playerShoot(target);
   }
 
   function resetTable() {
@@ -9058,20 +9345,24 @@ const UI = (() => {
     });
   }
 
+  // 換局：畫面淡入黑色、再淡出，莊家講一句話（沒有大字橫幅）；雙人時用字幕說比分，第三局提醒線路會被切斷
   async function roundBanner(r, hp) {
     World.setOrbit(false);
-    World.cam('high', 0);
-    const b = $('#banner');
-    b.querySelector('.b-big').textContent = `ROUND ${ROMAN[r]}`;
-    const s = Game.s, score = s && s.mp ? ` · 比分 ${s.wins.player}：${s.wins.dealer}` : '';
-    b.querySelector('.b-sub').textContent = `第 ${r} 局 · 雙方各 ${hp} 點電量${score}${r === 3 ? ' · 電量剩 2 點時，除顫器線路會被切斷' : ''}`;
-    b.hidden = false;
-    b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    const blk = $('#fx-black');
+    blk.style.transition = 'opacity .6s'; blk.style.opacity = '1';
     // 每局開頭：小聲、悶（濾掉中高頻）、開頭淡入，提示換局但不要嚇人
     if (!SFX.sting('hit1', { gain: 0.3, lp: 500, attack: 0.06 })) SFX.play('sting');
-    await World.cam('seat', 2.6, 'inOut');
-    b.hidden = true;
+    await World.wait(0.6);
+    World.cam('seat', 0);
+    await World.wait(0.5);
+    blk.style.transition = 'opacity .9s'; blk.style.opacity = '';
+    await World.wait(0.9);
+    blk.style.transition = '';
+    const s = Game.s;
+    if (s && s.mp) say(`第 ${r} 局 · 雙方各 ${hp} 點電量 · 比分 ${s.wins.player}：${s.wins.dealer}`);
+    else if (r === 3) say('電量剩 2 點時，除顫器線路會被切斷。');
     speak(r === 1 ? 'intro' : Math.random() < 0.5 ? 'back' : 'round', { gap: 0 });
+    await World.wait(0.6);
   }
 
   async function presentShells(live, blank) {
@@ -9203,9 +9494,6 @@ const UI = (() => {
     const onGun = ['magnifier', 'saw', 'inverter'].includes(id);
     if (onGun) World.camGun(viewer, id);
     else World.cam(viewer === 'player' ? 'seat' : 'dealerItem', 0.7);
-    const label = $('#item-label');
-    label.textContent = ITEMS[id].name;
-    flash('#item-label', 'show');
     const user = toward || side;
     if (user === 'dealer' && ITEM_LINE[id]) speak(ITEM_LINE[id], { chance: 0.6, delay: 0.4 });
     if (user === 'player' && side === 'player') speak({ handcuffs: 'youCuff', saw: 'youSaw' }[id], { chance: 0.6, delay: 0.6 });
@@ -9239,7 +9527,6 @@ const UI = (() => {
 
   async function hurt(who) {
     SFX.play('zap');
-    flash(`#m-${who}`, 'hurt');
     if (who === 'player') { flash('#fx-red'); World.shake(0.03); }
     else World.dealerFlinch();
     await World.wait(0.6);
@@ -9373,18 +9660,15 @@ const UI = (() => {
     e.querySelector('button').focus();
   }
 
-  // 道具說明浮動提示
+  // 道具名稱：滑鼠移到道具上時，在旁邊顯示一行小字
   function tip(item, x, y) {
     const t = $('#tip');
     if (!item) { t.hidden = true; return; }
-    const it = ITEMS[item.id];
-    t.innerHTML = '<b></b><span></span>';
-    t.querySelector('b').textContent = `${item.side === 'dealer' ? Game.who('dealer') + '的' : ''}${it.name}`;
-    t.querySelector('span').textContent = it.desc;
+    t.textContent = `${item.side === 'dealer' ? Game.who('dealer') + '的' : ''}${ITEMS[item.id].name}`;
     t.hidden = false;
     const w = t.offsetWidth, h = t.offsetHeight;
-    t.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, x + 16))}px`;
-    t.style.top = `${Math.max(8, y - h - 14)}px`;
+    t.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, x + 18))}px`;
+    t.style.top = `${Math.max(8, y - h - 10)}px`;
   }
 
   return {
@@ -9393,6 +9677,8 @@ const UI = (() => {
     aim, bang, dryFire, eject, peek, itemFx, itemDone, pickSteal, resolveSteal, isStealing, hurt,
     dealerDown, blackout, showEnd, showLeft, tip, cutWires, reaperRevive, coinFlip, skip, event, speak,
     isAiming: () => aiming,
+    // 鍵盤瞄準：方向鍵指向誰、Enter／空白鍵開槍
+    pointAt, fireAim, aimTarget: () => aimTarget,
     // 演出速度：3D 動畫、對話打字、規則流程的停頓一起變快
     setPace(k) { pace = k; World.setSpeed(k); Game.setPace(k); },
   };
@@ -9540,28 +9826,53 @@ function boot() {
     nameInput.focus();
   });
 
-  // 瞄準（拿槍與點道具由 3D 場景的點擊處理）
-  for (const [id, target] of [['#aim-dealer', 'dealer'], ['#aim-self', 'player']]) {
-    const b = $(id);
-    b.addEventListener('mouseenter', () => UI.previewAim(target));
-    b.addEventListener('focus', () => UI.previewAim(target));
-    b.addEventListener('click', () => Game.playerShoot(target));
-  }
-  $('#aim-cancel').addEventListener('click', () => UI.closeAim());
+  // 拿槍、點道具、瞄準開槍都在 3D 畫面上點（ui.js）
   $('#steal-cancel').addEventListener('click', () => UI.resolveSteal(null));
+
+  // ---------- 暫停選單（ESC；手機點右上角的小圖示）：聲音、音樂、規則與道具、設定 ----------
+  // 單人時連 3D 動畫一起停；雙人時對手還在跑，只蓋上選單
+  let paused = false, fromPause = false;
+  const inGame = () => !$('#stage').classList.contains('idle') && Game.s && !Game.s.over;
+  function openPause() {
+    if (paused || !inGame()) return;
+    paused = true;
+    $('#pause').hidden = false;
+    if (!Game.s.mp) World.setPaused(true);
+    $('#btn-resume').focus();
+  }
+  function closePause() {
+    if (!paused) return;
+    paused = false;
+    $('#pause').hidden = true;
+    World.setPaused(false);
+  }
+  $('#btn-menu').addEventListener('click', () => (paused ? closePause() : openPause()));
+  $('#btn-resume').addEventListener('click', closePause);
+  // 從暫停選單打開規則或設定：關掉時回到暫停選單
+  const fromMenu = open => () => { fromPause = paused; $('#pause').hidden = true; open(); };
+  const backToMenu = () => { if (fromPause) { fromPause = false; $('#pause').hidden = false; $('#btn-resume').focus(); } };
 
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
+    if (paused && e.key !== 'Escape') return;
     if (e.key === ' ' && Game.canAct() && !UI.isAiming()) { e.preventDefault(); UI.openAim(); return; }
+    // 拿著槍：方向鍵上／下（或 W／S）指向莊家／自己，空白鍵或 Enter 開槍
+    if (UI.isAiming() && Game.canAct()) {
+      if (['ArrowUp', 'w', 'W'].includes(e.key)) { e.preventDefault(); UI.pointAt('dealer'); return; }
+      if (['ArrowDown', 's', 'S'].includes(e.key)) { e.preventDefault(); UI.pointAt('player'); return; }
+      if ((e.key === ' ' || e.key === 'Enter') && UI.aimTarget()) { e.preventDefault(); UI.fireAim(); return; }
+    }
     // 不能操作的時候，空白鍵／Enter 跳過目前這句對話
     // （焦點在按鈕上時照常按按鈕，例如標題、結束畫面）
     if ((e.key === ' ' || e.key === 'Enter') && e.target.tagName !== 'BUTTON' && Game.s && !Game.s.over && !Game.canAct()) { e.preventDefault(); UI.skip(); return; }
     if (/^[1-8]$/.test(e.key) && Game.canAct() && !UI.isAiming()) { Game.playerUseItem(Number(e.key) - 1); return; }
     if (e.key === 'Escape') {
-      if (UI.isStealing()) UI.resolveSteal(null);
+      if (!$('#help').hidden) { $('#help').hidden = true; backToMenu(); }
+      else if (!$('#settings').hidden) closeSettings();
+      else if (paused) closePause();
+      else if (UI.isStealing()) UI.resolveSteal(null);
       else if (UI.isAiming()) UI.closeAim();
-      if (!$('#help').hidden) $('#help').hidden = true;
-      if (!$('#settings').hidden) closeSettings();
+      else openPause();
     }
   });
 
@@ -9615,14 +9926,17 @@ function boot() {
   const closeSettings = () => {
     $('#settings').hidden = true;
     if (previewing) { previewing = false; World.preview(false); $('#title').hidden = false; }
+    backToMenu();
   };
-  $('#btn-settings').addEventListener('click', openSettings);
+  $('#btn-settings').addEventListener('click', fromMenu(openSettings));
   $('#btn-settings2').addEventListener('click', openSettings);
   $('#settings-close').addEventListener('click', closeSettings);
 
-  $('#btn-help').addEventListener('click', () => { $('#help').hidden = false; $('#help-close').focus(); });
-  $('#help-close').addEventListener('click', () => { $('#help').hidden = true; });
+  $('#btn-help').addEventListener('click', fromMenu(() => { $('#help').hidden = false; $('#help-close').focus(); }));
+  $('#help-close').addEventListener('click', () => { $('#help').hidden = true; backToMenu(); });
 
+  // 一場結束、回到標題時選單一定關著
+  window.closePause = () => { fromPause = false; closePause(); };
   $('#btn-again').addEventListener('click', () => {
     // 雙人對局結束後回到標題，要再玩就重新開房。
     // 不能用 location.reload()：Google Apps Script 的網頁應用程式在 iframe 裡重新整理會變成白畫面
@@ -9635,6 +9949,7 @@ function boot() {
 function backToTitle() {
   const $ = sel => document.querySelector(sel);
   $('#end').hidden = true;
+  if (window.closePause) window.closePause();
   const skin = Settings.get().skin;
   if (World.charCached(skin)) World.setDealerSkin(skin);
   else Loader.cover('正在返回大廳……', () => { World.setDealerSkin(skin); return World.charReady(); });
