@@ -353,7 +353,7 @@ b.blank { color: var(--blank); }
 @media (prefers-reduced-motion: reduce) { .ld-cyl, .ld-ch b { animation-duration: 9.6s; } }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-10-19 14:56" };</script>
+<script>window.BUILD = { target: "web", at: "2026-11-03 14:55" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -6235,6 +6235,8 @@ const World = (() => {
     }
     D.handPos = [D.rest[0].clone(), D.rest[1].clone()];
     D.handVel = [V(), V()];
+    // 上一格手實際在哪、握得多緊（放開東西時讓彈簧接手用）
+    D.lastFp = [V(), V()]; D.lastW = [0, 0];
     D.foreDir = [V(0.2, -0.5, 1).normalize(), V(-0.2, -0.5, 1).normalize()];
     D.handQuat = [new T.Quaternion(), new T.Quaternion()];
     D.push = [V(), V()];
@@ -6644,6 +6646,10 @@ const World = (() => {
       // 伸手的整個過程從彈簧的位置逐漸靠到握點上，完全握住時正好貼在握點（不會最後一格突然跳過去，也不會中途猛衝）
       const k = src ? sstep(0, 1, w) : 0;
       const fp = D.handPos[i].clone().lerp(tp, k);
+      // 放開的途中彈簧跟著手實際的位置與速度走：不然握著時彈簧落後在半路，
+      // 手越鬆越靠回彈簧那邊，收手時會停頓一下再走
+      if (src && w < D.lastW[i] && dt > 1e-6) { vel.copy(fp).sub(D.lastFp[i]).divideScalar(dt); D.handPos[i].copy(fp); }
+      D.lastFp[i].copy(fp); D.lastW[i] = src ? w : 0;
       D.goalQuat[i].copy(D.handQuat[i]).slerp(tq, k);
       wristT.push(WRIST.clone().applyQuaternion(D.goalQuat[i]).add(fp));
       zhs.push(V(0, 0, 1).applyQuaternion(D.goalQuat[i]));
@@ -7591,7 +7597,9 @@ const World = (() => {
   // 鋸下來的那截槍管掉到桌上
   function dropBarrelTip() {
     const tipLen = 0.6 * 0.44;
-    const piece = mesh(new T.CylinderGeometry(0.0115, 0.0115, tipLen, 16), M.metal);
+    // 材質自己一份：掉在桌上停一下就淡出（不留在桌上當垃圾）
+    const mat = M.metal.clone();
+    const piece = mesh(new T.CylinderGeometry(0.0115, 0.0115, tipLen, 16), mat);
     piece.rotation.z = PI / 2;
     const holder = new T.Group();
     holder.add(piece);
@@ -7606,7 +7614,18 @@ const World = (() => {
       holder.position.copy(p0).add(V(0.05 * t, 0, 0.06 * t));
       holder.position.y = p0.y + 0.05 * Math.sin(t * PI * 0.5) - (p0.y - 0.011) * t * t;
       holder.quaternion.copy(q0).multiply(eq(roll * t, 0, 0));
-    }, 'linear').then(() => SFX.play('drop'));
+    }, 'linear').then(() => {
+      SFX.play('drop');
+      return wait(1.2);
+    }).then(() => {
+      mat.transparent = true;
+      return anim(0.6, t => { mat.opacity = 1 - t; }, 'in');
+    }).then(() => {
+      scene.remove(holder);
+      const k = spent.indexOf(holder);
+      if (k >= 0) spent.splice(k, 1);
+      piece.geometry.dispose(); mat.dispose();
+    });
   }
 
   // ---------- 除顫器電擊板（貼在鏡頭前） ----------
