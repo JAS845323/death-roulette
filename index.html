@@ -353,7 +353,7 @@ b.blank { color: var(--blank); }
 @media (prefers-reduced-motion: reduce) { .ld-cyl, .ld-ch b { animation-duration: 9.6s; } }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-11-03 14:55" };</script>
+<script>window.BUILD = { target: "web", at: "2026-11-03 15:29" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -2050,9 +2050,12 @@ const Game = {
     UI.renderInfo(s);
     await UI.aim(target, shooter);
     if (v) {
+      const before = s.hp[target];
       s.hp[target] = Math.max(0, s.hp[target] - dmg);
       if (target === 'player') s.stats.hitsTaken += dmg;
       await UI.bang(target, shooter);
+      // 還活著：鏡頭帶到除顫器，看著電量被扣掉（倒下的演出另外處理）
+      if (s.hp[target] > 0) await UI.drain(target, before, s.hp[target]);
     } else {
       await UI.dryFire(target, shooter);
     }
@@ -3737,6 +3740,254 @@ const WK = (() => {
 
 </script>
 <script>
+// 桌上的除顫器：照原版做成一台舊舊的米白色金屬機台
+// 前面斜面上是綠色 CRT（左右兩欄：DEALER／玩家名字，下面是閃電格數＝電量），
+// 頂上四個有直紋的接頭插著粗黑電纜，往後彎進一根生鏽的管子
+// buildDefib() 回傳 { group, screen }；螢幕內容用 drawDefib(state) 重畫
+(() => {
+  const { T, V, PI, env, std, mesh, canvasTex, grain, blot, R } = WK;
+
+  // ---------- 貼圖 ----------
+  // 機殼：米白烤漆、髒污、掉漆露出的鐵鏽
+  function paintTex() {
+    return canvasTex(512, 512, (g, w, h) => {
+      g.fillStyle = '#b3a886'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 220; i++) blot(g, R(0, w), R(0, h), R(10, 70), Math.random() < 0.65 ? 'rgba(60,45,22,.2)' : 'rgba(225,215,185,.16)');
+      // 往下流的污漬
+      for (let i = 0; i < 30; i++) {
+        const x = R(0, w), y = R(0, h * 0.6), len = R(30, 160);
+        const gr = g.createLinearGradient(0, y, 0, y + len);
+        gr.addColorStop(0, 'rgba(90,60,30,.28)'); gr.addColorStop(1, 'rgba(90,60,30,0)');
+        g.fillStyle = gr; g.fillRect(x, y, R(2, 6), len);
+      }
+      // 掉漆：一叢一叢不規則的小碎片（不是一顆顆圓點），周圍一圈淡淡的鏽水
+      for (let i = 0; i < 26; i++) {
+        const cx = R(0, w), cy = R(0, h), spread = R(6, 26);
+        blot(g, cx, cy, spread * 1.8, 'rgba(105,58,24,.22)');
+        for (let k = 0; k < 14; k++) {
+          const x = cx + R(-spread, spread), y = cy + R(-spread, spread) * 0.7, r = R(0.6, 3.2);
+          g.fillStyle = Math.random() < 0.7 ? 'rgba(58,32,15,.8)' : 'rgba(120,70,30,.7)';
+          g.beginPath(); g.moveTo(x - r, y);
+          for (let a = 1; a <= 5; a++) { const ang = a / 5 * PI * 2, rr = r * R(0.4, 1.3); g.lineTo(x + Math.cos(ang) * rr, y + Math.sin(ang) * rr * 0.7); }
+          g.fill();
+        }
+      }
+      // 底下比較髒
+      const dirt = g.createLinearGradient(0, h * 0.55, 0, h);
+      dirt.addColorStop(0, 'rgba(50,38,20,0)'); dirt.addColorStop(1, 'rgba(50,38,20,.35)');
+      g.fillStyle = dirt; g.fillRect(0, 0, w, h);
+      grain(g, w, h, 22);
+    });
+  }
+  // 生鏽的鐵（管子、接頭底座）
+  function rustTex() {
+    return canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = '#5a3a24'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 160; i++) blot(g, R(0, w), R(0, h), R(6, 40), ['rgba(140,70,30,.35)', 'rgba(40,24,14,.4)', 'rgba(170,110,60,.25)'][i % 3]);
+      grain(g, w, h, 40);
+    }, [2, 1]);
+  }
+
+  // 螢幕：深綠底、外框、中間分隔線、上排名字、下排閃電
+  const SCR_W = 512, SCR_H = 240;
+  const GREEN = '#8dffa8';
+  function bolt(g, x, y, s) {
+    g.beginPath();
+    g.moveTo(x + 0.55 * s, y); g.lineTo(x + 0.12 * s, y + 0.56 * s); g.lineTo(x + 0.42 * s, y + 0.56 * s);
+    g.lineTo(x + 0.28 * s, y + s); g.lineTo(x + 0.86 * s, y + 0.38 * s); g.lineTo(x + 0.55 * s, y + 0.38 * s);
+    g.lineTo(x + 0.72 * s, y); g.closePath(); g.fill();
+  }
+  function drawScreen(g, st) {
+    const w = SCR_W, h = SCR_H;
+    const bg = g.createRadialGradient(w / 2, h * 0.45, 20, w / 2, h / 2, w * 0.62);
+    bg.addColorStop(0, '#0d2a16'); bg.addColorStop(1, '#020803');
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    g.save();
+    g.strokeStyle = GREEN; g.fillStyle = GREEN; g.shadowColor = GREEN; g.shadowBlur = 10;
+    g.lineWidth = 3;
+    g.strokeRect(14, 14, w - 28, h - 28);
+    if (!st) {
+      // 待機：一條心電圖
+      g.globalAlpha = 0.85; g.lineWidth = 4; g.beginPath(); g.moveTo(26, 140);
+      for (let x = 26; x < w - 40; x += 96) { g.lineTo(x + 34, 140); g.lineTo(x + 46, 70); g.lineTo(x + 56, 190); g.lineTo(x + 66, 140); }
+      g.lineTo(w - 26, 140); g.stroke();
+      g.globalAlpha = 0.7; g.font = 'bold 26px monospace'; g.textAlign = 'left'; g.fillText('STANDBY', 30, 50);
+    } else {
+      g.beginPath(); g.moveTo(w / 2, 14); g.lineTo(w / 2, h - 14); g.moveTo(14, 78); g.lineTo(w - 14, 78); g.stroke();
+      g.font = 'bold 44px monospace'; g.textBaseline = 'middle';
+      const cols = [[st.dealerName, st.dealer], [st.playerName, st.player]];
+      cols.forEach(([name, hp], c) => {
+        const x0 = c ? w / 2 : 14, cw = w / 2 - 14;
+        g.textAlign = 'center'; g.globalAlpha = 1;
+        g.fillText(String(name).slice(0, 8), x0 + cw / 2, 48);
+        // 閃電：4 格以內一排，再多就分兩排
+        const n = st.max, per = n <= 4 ? n : Math.ceil(n / 2), gap = 10;
+        const s = Math.min(62, (cw - 24 - (per - 1) * gap) / per);
+        for (let i = 0; i < n; i++) {
+          const row = Math.floor(i / per), col = i % per, inRow = Math.min(per, n - row * per);
+          const bx = x0 + cw / 2 - (inRow * s + (inRow - 1) * gap) / 2 + col * (s + gap);
+          const by = (n > per ? 90 : 158 - s / 2) + row * (s + 6);
+          g.globalAlpha = i < hp ? 1 : 0.13;
+          bolt(g, bx, by, s);
+        }
+      });
+      if (st.cuffed) {
+        g.globalAlpha = 0.9; g.font = 'bold 20px monospace'; g.fillStyle = '#ffd36b'; g.shadowColor = '#ffd36b';
+        if (st.cuffed.dealer) { g.textAlign = 'center'; g.fillText('[CUFFED]', w / 4, h - 34); }
+        if (st.cuffed.player) { g.textAlign = 'center'; g.fillText('[CUFFED]', w * 3 / 4, h - 34); }
+      }
+    }
+    g.restore();
+    // 掃描線與暗角
+    g.fillStyle = 'rgba(0,0,0,.28)';
+    for (let y = 0; y < h; y += 3) g.fillRect(0, y, w, 1);
+    const vg = g.createRadialGradient(w / 2, h / 2, w * 0.3, w / 2, h / 2, w * 0.66);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.6)');
+    g.fillStyle = vg; g.fillRect(0, 0, w, h);
+  }
+  let liveTex = null, liveG = null, lastKey = '';
+  function drawDefib(st) {
+    const key = JSON.stringify(st);
+    if (key === lastKey) return;
+    lastKey = key;
+    drawScreen(liveG, st);
+    liveTex.needsUpdate = true;
+  }
+
+  // ---------- 幾何小工具 ----------
+  // 有直紋（滾花）的圓柱：半徑隨角度起伏
+  function ribbedCylinder(r, hgt, ribs = 14, depth = 0.12) {
+    const geo = new T.CylinderGeometry(r, r, hgt, ribs * 4, 1);
+    const p = geo.attributes.position, v = V();
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i);
+      const rr = Math.hypot(v.x, v.z);
+      if (rr < 1e-6) continue;
+      const a = Math.atan2(v.z, v.x), k = 1 - depth * (0.5 - 0.5 * Math.cos(a * ribs));
+      p.setXYZ(i, v.x * k, v.y, v.z * k);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }
+  // 側面輪廓（z, y）沿 x 擠出成機殼，邊角倒圓
+  function housingGeometry(width, prof) {
+    const s = new T.Shape(prof.map(([z, y]) => new T.Vector2(z, y)));
+    const geo = new T.ExtrudeGeometry(s, { depth: width - 0.012, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.006, bevelSegments: 3, curveSegments: 4 });
+    // 擠出方向是 shape 的 z：轉成沿 x，輪廓的 (z, y) 對到世界的 (z, y)
+    geo.translate(0, 0, -(width - 0.012) / 2);
+    geo.rotateY(-PI / 2);
+    // 依位置給 UV（貼圖在三個方向投影，不然擠出的側面會拉長）
+    const p = geo.attributes.position, n = geo.attributes.normal, uv = geo.attributes.uv;
+    for (let i = 0; i < p.count; i++) {
+      const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i));
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      if (ax > 0.6) uv.setXY(i, z * 3 + 0.5, y * 3);
+      else if (ay > 0.6) uv.setXY(i, x * 3 + 0.5, z * 3 + 0.3);
+      else uv.setXY(i, x * 3 + 0.5, y * 3 + 0.7);
+    }
+    return geo;
+  }
+
+  function buildDefib() {
+    const paint = std(0xffffff, { map: paintTex(), roughness: 0.7, metalness: 0.15, envMap: env.tex, envMapIntensity: 0.5 });
+    const rust = std(0xffffff, { map: rustTex(), roughness: 0.85, metalness: 0.4, envMap: env.tex, envMapIntensity: 0.4 });
+    const darkMetal = std(0x1b1c1c, { roughness: 0.55, metalness: 0.6, envMap: env.tex, envMapIntensity: 0.7 });
+    const rubber = std(0x0c0c0c, { roughness: 0.8 });
+    const knurl = std(0x9a8f70, { map: paint.map, roughness: 0.65, metalness: 0.3, envMap: env.tex, envMapIntensity: 0.6 });
+
+    const g = new T.Group();
+    const W = 0.3, D = 0.2;
+    // 側面輪廓：前面下半垂直、上半往後斜（螢幕在斜面上），頂面平的
+    const FZ = D / 2, BZ = -D / 2, Y0 = 0.032, Y1 = 0.098, SZ = 0.045;
+    const prof = [[BZ, 0], [FZ, 0], [FZ, Y0], [SZ, Y1], [BZ, Y1]];
+    const shell = mesh(housingGeometry(W, prof), paint);
+    g.add(shell);
+    // 底部一圈深色腳座
+    const foot = mesh(new T.BoxGeometry(W - 0.01, 0.008, D - 0.01), darkMetal);
+    foot.position.y = 0.004; g.add(foot);
+
+    // ---------- 斜面上的螢幕 ----------
+    const slope = Math.atan2(Y1 - Y0, FZ - SZ); // 斜面跟水平的夾角
+    const face = new T.Group();
+    face.position.set(0, (Y0 + Y1) / 2, (FZ + SZ) / 2);
+    face.rotation.x = -(PI / 2 - slope);
+    // 機殼倒角往外凸 6 公釐：面板往外推出來，不然螢幕埋在殼裡
+    face.translateZ(0.0062);
+    g.add(face);
+    const faceLen = Math.hypot(Y1 - Y0, FZ - SZ);
+    // 黑色外框（凹進去的螢幕框）
+    const bezel = mesh(new T.BoxGeometry(0.19, faceLen * 0.86, 0.006), darkMetal);
+    bezel.position.set(-0.03, 0, 0.002); face.add(bezel);
+    const c = document.createElement('canvas'); c.width = SCR_W; c.height = SCR_H;
+    liveG = c.getContext('2d');
+    liveTex = new T.CanvasTexture(c); liveTex.encoding = T.sRGBEncoding; liveTex.anisotropy = 8;
+    lastKey = '';
+    drawDefib(null);
+    const screen = new T.Mesh(new T.PlaneGeometry(0.17, faceLen * 0.72), new T.MeshBasicMaterial({ map: liveTex, toneMapped: false }));
+    screen.position.set(-0.03, 0, 0.0056); face.add(screen);
+    // 玻璃：一點點反光
+    const glass = new T.Mesh(new T.PlaneGeometry(0.17, faceLen * 0.72), new T.MeshStandardMaterial({ color: 0x223322, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.18, envMap: env.tex, envMapIntensity: 1.4 }));
+    glass.position.set(-0.03, 0, 0.0062); face.add(glass);
+    // 螢幕右邊：紅色指示燈、撥動開關、兩顆螺絲
+    const lamp = new T.Mesh(new T.SphereGeometry(0.0065, 12, 8), new T.MeshBasicMaterial({ color: 0xff3a22, toneMapped: false }));
+    lamp.scale.z = 0.6; lamp.position.set(0.1, 0.012, 0.004); face.add(lamp);
+    const lampRing = mesh(new T.TorusGeometry(0.0075, 0.0018, 6, 16), darkMetal);
+    lampRing.position.set(0.1, 0.012, 0.003); face.add(lampRing);
+    const swBase = mesh(new T.CylinderGeometry(0.006, 0.006, 0.004, 12), darkMetal);
+    swBase.rotation.x = PI / 2; swBase.position.set(0.1, -0.012, 0.003); face.add(swBase);
+    const sw = mesh(new T.CylinderGeometry(0.0015, 0.0022, 0.016, 8), std(0xb8b8b0, { metalness: 0.9, roughness: 0.3, envMap: env.tex }));
+    sw.position.set(0.1, -0.006, 0.009); sw.rotation.x = 0.6; face.add(sw);
+
+    // ---------- 螺絲、散熱孔 ----------
+    const screwGeo = new T.CylinderGeometry(0.0042, 0.0042, 0.003, 10);
+    const screw = (x, y, z, rx = 0, rz = 0) => { const s = mesh(screwGeo, darkMetal, false); s.position.set(x, y, z); s.rotation.set(rx, 0, rz); g.add(s); };
+    for (const x of [-W / 2 + 0.014, W / 2 - 0.014]) for (const z of [BZ + 0.014, SZ - 0.012]) screw(x, Y1 + 0.0015, z);
+    for (const x of [-W / 2 + 0.014, W / 2 - 0.014]) screw(x, Y0 / 2, FZ + 0.0015, PI / 2);
+    const ventGeo = new T.BoxGeometry(0.002, 0.006, 0.05);
+    for (const sx of [-1, 1]) for (let k = 0; k < 5; k++) {
+      const v = mesh(ventGeo, rubber, false);
+      v.position.set(sx * (W / 2 + 0.0005), 0.024 + k * 0.012, -0.03); g.add(v);
+    }
+
+    // ---------- 頂上的四個接頭與電纜 ----------
+    const pipeZ = BZ - 0.035, pipeY = 0.07;
+    const ribGeo = ribbedCylinder(0.02, 0.04);
+    const neckGeo = new T.CylinderGeometry(0.014, 0.017, 0.012, 16);
+    const capGeo = new T.CylinderGeometry(0.012, 0.0145, 0.01, 16);
+    for (let k = 0; k < 4; k++) {
+      const x = -0.105 + k * 0.07, z = -0.04;
+      const base = mesh(neckGeo, rust); base.position.set(x, Y1 + 0.006, z); g.add(base);
+      const rib = mesh(ribGeo, knurl); rib.position.set(x, Y1 + 0.032, z); rib.rotation.y = R(0, PI); g.add(rib);
+      const cap = mesh(capGeo, darkMetal); cap.position.set(x, Y1 + 0.057, z); g.add(cap);
+      // 電纜：從接頭頂往上冒一點再往後彎、插進後面的管子
+      const top = V(x, Y1 + 0.06, z);
+      const curve = new T.CatmullRomCurve3([
+        top, top.clone().add(V(0, 0.035, -0.005)), V(x + R(-0.01, 0.01), Y1 + 0.075, z - 0.06),
+        V(x, pipeY + 0.03, pipeZ + 0.012), V(x, pipeY + 0.012, pipeZ),
+      ]);
+      g.add(mesh(new T.TubeGeometry(curve, 24, 0.0095, 10, false), rubber));
+      // 電纜進管子的地方套一圈
+      const collar = mesh(new T.CylinderGeometry(0.013, 0.013, 0.012, 12), rust);
+      collar.position.set(x, pipeY + 0.016, pipeZ); g.add(collar);
+    }
+
+    // ---------- 後面的生鏽管子與支架 ----------
+    const pipe = mesh(new T.CylinderGeometry(0.018, 0.018, W + 0.12, 16), rust);
+    pipe.rotation.z = PI / 2; pipe.position.set(0, pipeY, pipeZ); g.add(pipe);
+    for (const sx of [-1, 1]) {
+      const flange = mesh(new T.CylinderGeometry(0.024, 0.024, 0.01, 16), rust);
+      flange.rotation.z = PI / 2; flange.position.set(sx * (W / 2 + 0.06), pipeY, pipeZ); g.add(flange);
+      const leg = mesh(new T.BoxGeometry(0.012, pipeY, 0.03), rust);
+      leg.position.set(sx * (W / 2 - 0.02), pipeY / 2, pipeZ); g.add(leg);
+    }
+    return { group: g, screen };
+  }
+
+  Object.assign(WK, { buildDefib, drawDefib, defibLiveTex: () => liveTex });
+})();
+
+</script>
+<script>
 // 房間、吊燈與燈光、後牆的電閘、桌子、道具格、桌上的除顫器、椅背
 // buildRoom() / buildTable() 回傳之後還要操作的燈光與物件
 (() => {
@@ -3887,20 +4138,11 @@ const WK = (() => {
       s.position.copy(slotPos(side, i)).setY(0.001);
       scene.add(s);
     }
-    // 桌上的除顫器
-    const defib = new T.Group();
-    const body = mesh(new T.BoxGeometry(0.22, 0.1, 0.26), M.plastic);
-    body.position.y = 0.05; defib.add(body);
-    const screen = new T.Mesh(new T.PlaneGeometry(0.15, 0.07), new T.MeshBasicMaterial({ map: tex.ecg }));
-    screen.position.set(0, 0.07, 0.131); defib.add(screen);
+    // 桌上的除顫器（defib.js）
+    const { group: defib, screen } = WK.buildDefib();
     defibScreen = screen;
-    for (const x of [-0.05, 0.05]) {
-      const p = mesh(new T.BoxGeometry(0.07, 0.025, 0.1), M.metalDark);
-      p.position.set(x, 0.113, -0.04); defib.add(p);
-      const hdl = mesh(new T.CylinderGeometry(0.012, 0.012, 0.06, 10), M.dark);
-      hdl.rotation.x = PI / 2; hdl.position.set(x, 0.135, -0.04); defib.add(hdl);
-    }
-    defib.position.set(0.93, 0, -0.08); defib.rotation.y = -0.5;
+    // 跟原版一樣放在右手邊桌緣、靠莊家那一半，後面的管子伸出桌外；螢幕轉向玩家的座位
+    defib.position.set(1.0, 0, -0.42); defib.rotation.y = -0.5;
     scene.add(defib);
     defibBox = defib;
     // 椅背
@@ -7991,10 +8233,12 @@ const World = (() => {
     setLamp(BRK.red, cut ? 1 : 0);
     BRK.light.intensity = cut ? 0 : 0.9;
     BRK.bulb.material.color.setHex(cut ? 0x1a1610 : 0xffe2b0);
-    defibScreen.material.map = cut ? tex.ecgDead : tex.ecg;
+    defibScreen.material.map = cut ? tex.ecgDead : WK.defibLiveTex();
   }
 
   const BRK_CAM = { pos: [-1.08, 1.12, -2.28], look: [-1.42, 0.97, -3.45], fov: 40 };
+  // 看桌上除顫器的鏡頭（位置用機台自己的座標：機台搬家鏡頭跟著走）
+  const defibCam = (at, fov) => ({ pos: defibBox.localToWorld(at.clone()).toArray(), look: defibBox.localToWorld(V(-0.02, 0.055, 0.05)).toArray(), fov });
   async function cutPower() {
     SFX.sting('cut', { delay: 2.25 / speed, mark: 2.52 });
     await cam(BRK_CAM, 1.6, 'inOut');
@@ -8028,12 +8272,12 @@ const World = (() => {
     redLight.intensity = 0.25;
     await wait(0.45);
     // 趁全黑直接切到桌上的除顫器（從電閘飛過來會穿過莊家），再慢慢推近：螢幕閃雜訊、冒火花後黑掉
-    cam({ pos: [0.5, 0.34, 0.64], look: [0.86, 0.07, 0.03], fov: 40 }, 0);
-    cam({ pos: [0.62, 0.26, 0.44], look: [0.86, 0.07, 0.03], fov: 38 }, 1.8, 'out');
+    cam(defibCam(V(-0.02, 0.32, 0.78), 40), 0);
+    cam(defibCam(V(0, 0.24, 0.52), 38), 1.8, 'out');
     await wait(0.35);
     const scr = defibScreen.localToWorld(V(0, 0.03, 0.02));
     for (let i = 0; i < 6; i++) {
-      defibScreen.material.map = i % 2 ? tex.ecgStatic : tex.ecg;
+      defibScreen.material.map = i % 2 ? tex.ecgStatic : WK.defibLiveTex();
       if (i === 2) {
         SFX.play('spark');
         emit(scr, { count: 22, color: 0xffd090, size: 0.012, life: 0.5, vel: V(0, 0.5, 0.2), vspread: 0.5, gravity: 3, grow: 0, opacity: 1 });
@@ -8280,6 +8524,11 @@ const World = (() => {
     cutPower, setPower, reaperRevive, setQuality, setCharacter, coinFlip,
     // 舊名字：外觀現在是整個角色
     setDealerSkin: id => setCharacter(id),
+    // 桌上除顫器的螢幕：{ dealerName, playerName, dealer, player, max, cuffed } 或 null（待機）
+    setDefib: st => WK.drawDefib(st),
+    camDefib: (dur = 0.7) => cam(defibCam(V(0.01, 0.17, 0.3), 34), dur),
+    // 現在的鏡頭（丟回 cam() 就回到這裡）
+    camNow: () => ({ pos: rig.pos.toArray(), look: rig.look.toArray(), fov: rig.fov, roll: rig.roll }),
     // 這個角色的頭和身體雕過了沒（沒雕過的換上去要等一兩秒）
     charCached: id => !!(WK.Head.cache[id] && WK.Body.cache[id]),
     // 目前角色的頭和身體都雕好、接上後才結束（雕過的馬上結束）
@@ -8512,6 +8761,29 @@ const UI = (() => {
 
   function renderItems(s) { World.syncItems(s.items); }
 
+  // 桌上除顫器螢幕要畫的東西
+  const defibState = (s, hp = s.hp) => ({ dealerName: s.mp ? s.opp : 'DEALER', playerName: s.name, dealer: hp.dealer, player: hp.player, max: s.max, cuffed: { dealer: !!s.cuffs.dealer, player: !!s.cuffs.player } });
+
+  // 中彈後：鏡頭帶到除顫器，被扣掉的閃電閃三下熄掉，再回到原本的鏡頭（你可能還舉著槍）
+  async function drain(who, from, to) {
+    const s = Game.s;
+    if (!s || from <= to) return;
+    const at = hp => World.setDefib(defibState(s, Object.assign({}, s.hp, { [who]: hp })));
+    at(from);
+    const back = World.camNow();
+    await World.camDefib(0.75);
+    await World.wait(0.15);
+    for (let k = 0; k < 3; k++) {
+      at(to); SFX.play('beep');
+      await World.wait(0.13);
+      at(from);
+      await World.wait(0.13);
+    }
+    at(to); SFX.play('ecg');
+    await World.wait(0.5);
+    await World.cam(back, 0.7);
+  }
+
   function renderHP(s) {
     const row = (who, label) => {
       const el = $(`#m-${who}`);
@@ -8524,6 +8796,7 @@ const UI = (() => {
     row('player', s.name);
     $('#m-round').textContent = ROMAN[s.round];
     $('#monitor').classList.toggle('cut', s.wiresCut);
+    World.setDefib(defibState(s));
     // 對面的心情：自己的血越少喘得越重，你的血越少笑得越開（雙人時表情也跟著電量走）
     World.dealerMood(s.hp.dealer / s.max, s.hp.player / s.max, s.hp.dealer);
     for (const w of ['dealer', 'player']) {
@@ -8600,6 +8873,7 @@ const UI = (() => {
     World.resetDealer();
     World.setSawed(false);
     World.setPower(false);
+    World.setDefib(null);
     World.gunTo('rest', 0.01);
     if (down) { down = false; World.paddlesOut(); World.reviveStage(false); }
     eyes(1, 0, 0);
@@ -8954,7 +9228,7 @@ const UI = (() => {
   }
 
   return {
-    build, say, renderItems, renderHP, renderInfo, renderAll, setInteractive,
+    build, say, renderItems, renderHP, renderInfo, renderAll, setInteractive, drain,
     openAim, closeAim, previewAim, resetTable, setSawed, resetGun, roundBanner, presentShells,
     aim, bang, dryFire, eject, peek, itemFx, itemDone, pickSteal, resolveSteal, isStealing, hurt,
     dealerDown, blackout, showEnd, showLeft, tip, cutWires, reaperRevive, coinFlip, skip, event, speak,
