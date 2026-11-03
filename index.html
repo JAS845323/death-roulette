@@ -248,7 +248,7 @@ b.blank { color: var(--blank); }
 .seg.skins b { font-size: 19px; }
 .seg.skins small { line-height: 1.5; text-align: center; }
 .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 22px; }
-.seg.skins, .seg.speed { grid-template-columns: repeat(4, 1fr); }
+.seg.speed { grid-template-columns: repeat(4, 1fr); }
 .overlay .seg button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px; font-size: 17px; }
 .seg button small { font-size: 12px; color: var(--dim); letter-spacing: 0; }
 .overlay .seg button[aria-pressed="true"] { background: var(--bone); color: #0a0b0a; border-color: var(--bone); }
@@ -353,7 +353,7 @@ b.blank { color: var(--blank); }
 @media (prefers-reduced-motion: reduce) { .ld-cyl, .ld-ch b { animation-duration: 9.6s; } }
 
 </style>
-<script>window.BUILD = { target: "web", at: "2026-11-03 15:29" };</script>
+<script>window.BUILD = { target: "web", at: "2026-11-03 15:36" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -515,7 +515,6 @@ b.blank { color: var(--blank); }
         <div class="seg skins" id="opt-skin">
           <button type="button" data-v="dealer"><b>莊家</b><small>男・光頭<br>咧嘴獰笑・瘦削</small></button>
           <button type="button" data-v="widow"><b>寡婦</b><small>女・黑長髮<br>嘴角下垂・纖細</small></button>
-          <button type="button" data-v="butcher"><b>屠夫</b><small>男・平頭鬍渣<br>張嘴咆哮・肥胖</small></button>
           <button type="button" data-v="crone"><b>瘋婆</b><small>女・灰白髮髻<br>咧嘴狂笑・乾瘦</small></button>
         </div>
         <button id="settings-close" type="button">完成</button>
@@ -1262,8 +1261,6 @@ const SFX = (() => {
     exhale() { breath(0.9, 0.22, 0, 900, 500); },
     chuckle() { for (let i = 0; i < 3; i++) breath(0.12, 0.2 - i * 0.04, i * 0.17, 1100, 700); },
     tsk() { noise(0.02, { type: 'highpass', freq: 3500, gain: 0.35 }); breath(0.25, 0.1, 0.08, 1000, 700); },
-    // 屠夫折手指的「喀」：很短的關節響，小聲
-    crack() { noise(0.014, { type: 'bandpass', freq: 1900 + Math.random() * 600, q: 2.5, gain: 0.22 }); noise(0.03, { type: 'lowpass', freq: 500, gain: 0.08 }); },
     beep() { tone(880, 0.07, { type: 'square', gain: 0.06 }); },
     deny() { tone(140, 0.18, { type: 'square', gain: 0.1 }); },
     sign() { noise(0.35, { type: 'bandpass', freq: 3000, to: 1200, q: 2, gain: 0.2 }); },
@@ -1623,7 +1620,7 @@ const Net = (() => {
 
   // ---------- 配對 ----------
   // 開房的人等第一個進來的客人；客人看到房主的 start 裡寫的是自己的 tok 才開始
-  const cleanSkin = v => (['dealer', 'widow', 'butcher', 'crone'].includes(v) ? v : 'dealer');
+  const cleanSkin = v => (['dealer', 'widow', 'crone'].includes(v) ? v : 'dealer');
 
   function host(code, name, diff, skin) {
     return new Promise(async (res, rej) => {
@@ -2206,16 +2203,15 @@ const Game = {
 
 </script>
 <script>
-// 莊家 AI：會記牌、會用道具，但不會偷看槍膛。四個角色各有打法（persona）：
+// 莊家 AI：會記牌、會用道具，但不會偷看槍膛。三個角色各有打法（persona）：
 //   calc    莊家：冷靜計算，最接近最佳打法
-//   brute   屠夫：愛鋸槍、愛打你，很少浪費時間拿情報，血剩一半才補
 //   careful 寡婦：保守、愛補血，先拿情報再開槍，不確定時寧可開你也不賭自己
 //   gambler 瘋婆：有藥就吃（血剩 1 也吃），偶爾不照機率亂開、亂用道具
 // decide(s, { side, persona }) 替 side（預設 'dealer'）決定一個動作：
 //   { type: 'item', slot, id, steal? } 或 { type: 'shoot', target: 'player' | 'dealer' }
 // 亂數一律用 Math.random（AI 只在單人用；不能碰 game.js 的共用亂數 rand，雙人的順序才不會亂）
 const AI = {
-  PERSONA: { dealer: 'calc', widow: 'careful', butcher: 'brute', crone: 'gambler' },
+  PERSONA: { dealer: 'calc', widow: 'careful', crone: 'gambler' },
 
   decide(s, { side = 'dealer', persona = 'calc' } = {}) {
     const me = side, opp = me === 'player' ? 'dealer' : 'player';
@@ -2310,7 +2306,6 @@ const AI = {
   //   coin 剛好一半時擲硬幣、wild 不照機率亂開、chaos 隨便用道具
   TRAITS: {
     calc: { cigBelow: 1, medGap: 2, medMinHp: 2, medChance: 1, info: 1, beer: 1, beerLo: 0.3, beerHi: 0.7, invert: 1, invertUnknown: 1, shootOpp: 0.5, cuffs: 1, cuffsP: 0.5, saw: 1, sawP: 0.6, sawLive: 1, coin: false, wild: 0, chaos: 0 },
-    brute: { cigBelow: 0, medGap: 3, medMinHp: 2, medChance: 0.5, info: 0.7, beer: 0.2, beerLo: 0.3, beerHi: 0.6, invert: 1, invertUnknown: 0.5, shootOpp: 0.4, cuffs: 1, cuffsP: 0.4, saw: 1, sawP: 0.4, sawLive: 1, coin: false, wild: 0, chaos: 0 },
     careful: { cigBelow: 1, medGap: 1, medMinHp: 2, medChance: 1, info: 1, beer: 1, beerLo: 0.2, beerHi: 0.8, invert: 1, invertUnknown: 0.6, shootOpp: 0.35, cuffs: 1, cuffsP: 0.6, saw: 0.6, sawP: 0.75, sawLive: 1, coin: false, wild: 0, chaos: 0 },
     gambler: { cigBelow: 1, medGap: 1, medMinHp: 1, medChance: 1, info: 0.85, beer: 0.6, beerLo: 0.25, beerHi: 0.75, invert: 0.9, invertUnknown: 0.8, shootOpp: 0.5, cuffs: 0.9, cuffsP: 0.5, saw: 0.9, sawP: 0.5, sawLive: 1, coin: true, wild: 0.1, chaos: 0.06 },
   },
@@ -2344,9 +2339,8 @@ const AI = {
     const order = [];
     if (persona === 'careful' && hurt) order.push('cigarettes', 'medicine');
     if (k === undefined) order.push('magnifier');
-    if (k === true) order.push(persona === 'brute' ? 'saw' : 'handcuffs', persona === 'brute' ? 'handcuffs' : 'saw');
+    if (k === true) order.push('handcuffs', 'saw');
     if (k === false) order.push('inverter');
-    if (persona === 'brute' && k !== false) order.push('saw', 'handcuffs');
     if (hurt) order.push('cigarettes');
     if (k === undefined) order.push('beer');
     for (const id of order) {
@@ -2438,40 +2432,6 @@ const LINES = {
     wires: ['沒有人會救我們了。'],
     back: ['……我又回來了。'],
     lose: ['留下來陪我吧。'],
-  },
-  // 屠夫：粗魯、兇，滿嘴肉和刀
-  butcher: {
-    intro: ['新鮮的肉。', '坐好，別亂動。'],
-    round: ['熱身結束。', '刀磨好了。'],
-    think: ['哼。', '看我的。'],
-    wait: ['快點！', '你在等什麼，等死嗎？'],
-    aimYou: ['看這裡！', '吃我一發！'],
-    aimSelf: ['老子不怕。'],
-    hitYou: ['哈！剁開了！', '這才叫肉！'],
-    missYou: ['嘖！'],
-    safeSelf: ['哈！命硬！'],
-    hurtSelf: ['他媽的！'],
-    youMiss: ['就這樣？', '軟腳蝦。'],
-    youHit: ['你找死！', '呃啊……！'],
-    youSafe: ['有種。'],
-    youHurt: ['哈哈哈！蠢貨！'],
-    heal: ['抽一根再說。'],
-    medBad: ['這什麼鬼藥！'],
-    saw: ['來，鋸短一點！', '這樣才夠痛！'],
-    cuff: ['乖乖坐好。'],
-    peek: ['哼哼。'],
-    beer: ['乾！'],
-    phone: ['講快點！'],
-    invert: ['翻面！'],
-    steal: ['你的？現在是我的了。'],
-    youCuff: ['解開！'],
-    youSaw: ['你敢！'],
-    youSteal: ['小偷！'],
-    low: ['……我還站得起來。'],
-    youLow: ['最後一塊肉。'],
-    wires: ['好！沒人能逃了！'],
-    back: ['再來！'],
-    lose: ['上砧板。'],
   },
   // 瘋婆：咯咯笑、胡言亂語、愛賭藥
   crone: {
@@ -3526,7 +3486,7 @@ const WK = (() => {
 
 </script>
 <script>
-// 程序貼圖（牆、地板、桌布、皮膚、頭髮、圍裙、除顫器螢幕、電閘面板）與共用材質
+// 程序貼圖（牆、地板、桌布、皮膚、頭髮、除顫器螢幕、電閘面板）與共用材質
 (() => {
   const { PI, R, canvasTex, grain, blot, std, env } = WK;
 
@@ -3644,15 +3604,6 @@ const WK = (() => {
         g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + R(-5, 5), h * 0.33, x + R(-5, 5), h * 0.66, x + R(-3, 3), h); g.stroke();
       }
     }, [4, 1]);
-    // 圍裙：髒白布、血跡、手擦過的痕跡
-    tex.apron = canvasTex(256, 256, (g, w, h) => {
-      g.fillStyle = '#9c927c'; g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 60; i++) blot(g, R(0, w), R(0, h), R(8, 34), 'rgba(80,64,40,.25)');
-      for (let i = 0; i < 34; i++) blot(g, R(10, w - 10), R(0, h), R(8, 34), 'rgba(105,6,6,.6)');
-      g.strokeStyle = 'rgba(90,6,6,.6)';
-      for (let i = 0; i < 7; i++) { g.lineWidth = R(3, 7); const x = R(30, w - 30), y = R(h * 0.3, h * 0.8); g.beginPath(); g.moveTo(x, y); g.lineTo(x + R(-40, 40), y + R(20, 70)); g.stroke(); }
-      grain(g, w, h, 14);
-    }, null);
     tex.slot = canvasTex(128, 128, (g, w) => {
       g.strokeStyle = 'rgba(230,225,200,.16)'; g.lineWidth = 3; g.setLineDash([10, 7]);
       g.strokeRect(6, 6, w - 12, w - 12);
@@ -4163,20 +4114,20 @@ const WK = (() => {
 
 </script>
 <script>
-// 角色：四種同畫風的長相（頭型參數、皮膚貼圖、牙齒、眼睛、頭髮）與身體輪廓；頭怎麼雕在 head.js
+// 角色：三種同畫風的長相（頭型參數、皮膚貼圖、牙齒、眼睛、頭髮）與身體輪廓；頭怎麼雕在 head.js
 (() => {
   const { T } = WK;
 
-  // ---------- 角色：四種同畫風的長相（頭型、表情、頭髮、胖瘦、性別） ----------
+  // ---------- 角色：三種同畫風的長相（頭型、表情、頭髮、胖瘦、性別） ----------
   // head：頭的各部位尺寸（公尺，head.js 的 BASE 是預設值）——skull 頭顱、face 臉型（jawW 下顎寬、chin 下巴、fat 臉頰肉、
   //       chin2 雙下巴、hollow 臉頰凹陷、temple 太陽穴凹陷）、brow 眉骨、eye 眼睛（r 眼球、tilt 外眼角上揚、deep 眼窩深）、
   //       nose 鼻子（hook 鉤鼻）、mouth 嘴（w 半寬、curve 嘴角上揚、open 嘴唇張開、up/lo 上下唇厚、jaw0 平常下巴張開的角度）、
   //       ear 耳朵（s 大小、out 往外張的角度、lobe 耳垂）、neck 脖子（adam 喉結、tendon 頸部肌腱）
   // eyes：眼白的顏色（dark 原作的黑眼睛、blood 充血、yellow 泛黃、milky 白濁）；glow：瞳孔的光
   // paint：base 膚底色、lip 嘴唇、blood 嘴角流血、tears 黑色淚痕、liner 眼線、wrinkle 皺紋強度、stubble 鬍渣
-  // body：w 寬、d 厚、belly 肚子、chest 胸、shoulder 肩寬、arm 手臂粗細；outfit：服裝（body.js 的 OUTFITS：suit、mourning、apron、shawl）
+  // body：w 寬、d 厚、belly 肚子、chest 胸、shoulder 肩寬、arm 手臂粗細；outfit：服裝（body.js 的 OUTFITS：suit、mourning、shawl）
   // persona：個性（scene.js 讀）——face 平常的表情（加在其他表情上）、bend 上半身往前彎（負的往後挺）、chin 下巴抬起、
-  //          rest 休息時兩手放哪（莊家的座標，沒給就用預設）、elbows 手肘壓在桌上（手臂反向運動學的手肘方向 [x, y, z]）、fidget 待機小動作（tap 敲桌、veil 拉面紗、knuckles 折手指、sway 晃頭）、
+  //          rest 休息時兩手放哪（莊家的座標，沒給就用預設）、elbows 手肘壓在桌上（手臂反向運動學的手肘方向 [x, y, z]）、fidget 待機小動作（tap 敲桌、veil 拉面紗、sway 晃頭）、
   //          tell 用放大鏡看到子彈時藏不住的表情：live／blank = [秒, smile, jaw, squint, brow]，blankP 看到空包也這樣（假的）的機率
   //          veil 戴面紗（head.js）
   const CHARS = {
@@ -4211,24 +4162,6 @@ const WK = (() => {
       teeth: { missing: [], color: 0xe4dece },
       body: { w: 0.85, d: 0.92, belly: 0, chest: 0.045, shoulder: 0.9, arm: 0.86 },
       persona: { face: { smile: -0.35, brow: 0.25 }, bend: -0.07, chin: 0.07, fidget: 'veil', veil: true, tell: { live: [0.9, 0.55, 0, 0.1, 0] } },
-    },
-    butcher: {
-      tint: 0xf4d8c8, rough: 0.58, hair: 'buzz', hairColor: 0x4a3c32, eyes: 'yellow', glow: 0xffe8c8, outfit: 'apron',
-      head: {
-        skull: { w: 0.152, h: 0.178, d: 0.17, y: 0.218 },
-        face: { w: 1.18, cheek: 1.25, hollow: 0, temple: 0, fat: 1, chin2: 0.85, jawW: 0.108, jawY: 0.035, chinW: 1.4, chinY: -0.02, chinZ: 0.138, chinR: 0.034 },
-        brow: { k: 1.6, z: 0.152 },
-        eye: { x: 0.054, r: 0.022, deep: 1.4, up: 0.3, low: -0.24 },
-        nose: { tipR: 0.022, tipY: 0.125, tipZ: 0.214, w: 0.027, bridge: 0.011, flare: 1.3 },
-        mouth: { w: 0.06, curve: -0.01, open: 0.018, up: 0.01, lo: 0.012, z: 0.186, jaw0: 0.06 },
-        ear: { s: 1, out: 0.22, lobe: 1.1 },
-        neck: { r: 0.068, adam: 0.6, tendon: 0 },
-      },
-      paint: { base: [188, 150, 128], lip: [122, 52, 46], blood: true, tears: false, wrinkle: 0.7, stubble: 1 },
-      teeth: { missing: [-5, -1, 3, 6], color: 0xc8b886 },
-      body: { w: 1.32, d: 1.38, belly: 0.13, chest: 0, shoulder: 1.22, arm: 1.28 },
-      persona: { face: { smile: -0.3, brow: 0.45 }, bend: 0.22, chin: 0, elbows: [0.45, -0.15, -0.12], rest: [[-0.11, 0, 0.6], [0.11, 0, 0.6]], fidget: 'knuckles',
-        cuffed: [0.042, 0.04, 0.56], tell: { live: [2.2, 1, 0.08, 0.45, -0.3], blank: [1.2, -0.5, 0, 0, 0.6] } },
     },
     crone: {
       tint: 0xfff0cc, rough: 0.62, hair: 'bun', hairColor: 0xf2eee6, eyes: 'milky', glow: 0xf4fff0, outfit: 'shawl',
@@ -5529,7 +5462,7 @@ normal = headPerturb(-vViewPosition, normal, dH * uBump * 4.0, faceDirection);`)
 </script>
 <script>
 // 身體：穿著衣服的上半身用距離場雕（跟頭、手同一套 sdf.js），袖子是蒙皮的管子（肩、肘兩根骨頭，跟著手臂 IK 擺）。
-// 四套服裝：suit 舊西裝＋襯衫領帶、mourning 高領喪服＋蕾絲、apron 襯衫＋沾血圍裙＋捲袖、shawl 洋裝＋針織披肩。
+// 三套服裝：suit 舊西裝＋襯衫領帶、mourning 高領喪服＋蕾絲、shawl 洋裝＋針織披肩。
 // 座標：莊家的座標（D.group：桌面高度 y = 0、+z 朝玩家）；網格放在 D.upper 底下（往前趴時整塊跟著轉）
 (() => {
   const { T, V, PI, R, M, env } = WK;
@@ -5634,7 +5567,6 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
     // 頂點顏色是線性 RGB（0.02 大約是螢幕上的深灰黑）
     suit: { fab: ['wool', 'cotton', 'silk'], scale: [18, 22, 14], col: { main: [0.016, 0.014, 0.013], shirt: [0.2, 0.18, 0.12], tie: [0.07, 0.006, 0.008], lining: [0.004, 0.004, 0.004], button: [0.008, 0.006, 0.005] } },
     mourning: { fab: ['crepe', 'lace', 'crepe'], scale: [16, 12, 16], col: { main: [0.009, 0.008, 0.011], lace: [0.02, 0.017, 0.022], button: [0.004, 0.004, 0.004], lining: [0.003, 0.003, 0.003] } },
-    apron: { fab: ['cotton', 'canvas', 'cotton'], scale: [20, 16, 20], col: { main: [0.16, 0.14, 0.105], apron: [0.26, 0.23, 0.17], strap: [0.2, 0.18, 0.13], blood: [0.07, 0.004, 0.004], lining: [0.01, 0.009, 0.008] } },
     shawl: { fab: ['wool', 'knit', 'wool'], scale: [18, 9, 18], col: { main: [0.014, 0.016, 0.012], shawl: [0.07, 0.04, 0.045], brooch: [0.2, 0.12, 0.03], lining: [0.004, 0.004, 0.004] } },
   };
 
@@ -5652,12 +5584,6 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
     let a = 0, b = 0.5;
     for (let k = 0; k < 28; k++) { const t = (a + b) / 2; if (f(x, y, sgn * t) < off) a = t; else b = t; }
     return sgn * b;
-  }
-  // 從 c 沿 dir 往外走到距離場 = off 的地方
-  function surfAlong(f, c, dir, off = 0) {
-    let a = 0, b = 0.5;
-    for (let k = 0; k < 28; k++) { const t = (a + b) / 2; if (f(c.x + dir.x * t, c.y + dir.y * t, c.z + dir.z * t) < off) a = t; else b = t; }
-    return c.clone().addScaledVector(dir, b);
   }
   function shape(L) {
     const { b, W, Dp, sh, arm, neckR, neckZ, outfit } = L;
@@ -5687,7 +5613,7 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
     let offset = () => 0;   // 往外推（公尺）
     // 衣服本身的部位顏色：[部位, 比例] 的組合（邊界用平滑的遮罩，頂點之間才不會鋸齒）
     let mixOf = () => [['main', 1]];
-    // 被一層布（圍裙、披肩）蓋住的地方：身體表面與那層布的內面，看不到
+    // 被一層布（披肩）蓋住的地方：身體表面與那層布的內面，看不到
     let covered = () => false;
     if (outfit === 'suit') {
       // 西裝外套比基本外形厚 6 公釐；前面 V 字領口裡是襯衫（不推）、翻領再厚一點、領帶
@@ -5718,35 +5644,6 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
       });
       extra.push([frill, 0.003, 'lace']);
       for (let y = 0.42; y > 0.02; y -= 0.04) extra.push([ell([0, y, zf(0, y) + 0.004], 0.0055, 0.0055, 0.0045), 0.0015, 'button']);
-    } else if (outfit === 'apron') {
-      // 襯衫＋圍裙：圍裙是離身體 1.6 公分的一片布（有厚度），從胸口蓋到下面；兩條帶子掛過肩膀繞到後面
-      offset = () => 0.003;
-      const apronTop = x => 0.42 - 0.24 * smooth(0.08, 0.2, Math.abs(x));
-      const apronRegion = (x, y, z) => Math.max(Math.abs(x) - (W * 1.06), y - apronTop(x), 0.01 - z);
-      // 圍裙從肚子最凸的地方直直往下垂（不貼著肚子往內收）：肚子以下把身體換成一面垂直的牆再往外 2 公分
-      const yb = -0.03, zb = surfZ(base, 0, yb);
-      const hang = (x, y, z) => smin(base(x, y, z), Math.max(z - (zb - 0.06 * (x / W) ** 2), y - yb), 0.04);
-      const sheet = bounded([0, -0.05, 0.1, 0.65], (x, y, z) => smax(Math.abs(hang(x, y, z) - 0.02) - 0.0055, apronRegion(x, y, z), 0.006));
-      extra.push([sheet, 0.004, 'apron']);
-      covered = (x, y, z) => apronRegion(x, y, z) < -0.006 && hang(x, y, z) < 0.02 - 0.0025;
-      // 帶子：從圍裙上緣的兩角往上繞過肩膀到背後（在 x = ±0.09 的平面上，從胸腔中心往外找表面）
-      for (const sx of [1, -1]) {
-        const pts = [];
-        for (let i = 0; i <= 10; i++) {
-          const ph = 0.15 + (i / 10) * (PI - 0.6), c = V(sx * 0.09, 0.36, -0.01), dir = V(0, Math.sin(ph), Math.cos(ph));
-          const p = surfAlong(base, c, dir, 0.004);
-          pts.push([p.x, p.y, p.z]);
-        }
-        extra.push([tube(pts, pts.map(() => 0.0055)), 0.004, 'strap']);
-      }
-      // 脖子後面掛圍裙的帶子
-      const ring = [];
-      for (let i = 0; i <= 10; i++) { const a = PI * 0.6 + (i / 10) * PI * 0.8; ring.push([Math.sin(a) * (neckR + 0.02), 0.48, neckZ + Math.cos(a) * (neckR + 0.02)]); }
-      extra.push([tube(ring, ring.map(() => 0.0055)), 0.006, 'strap']);
-      // 襯衫領口
-      const nl = [];
-      for (let i = 0; i <= 16; i++) { const a = (i / 16) * PI * 2; nl.push([Math.sin(a) * (neckR + 0.01), 0.462 - 0.008 * Math.max(0, Math.cos(a)), neckZ + Math.cos(a) * (neckR + 0.01)]); }
-      extra.push([tube(nl, nl.map(() => 0.006)), 0.006, 'main']);
     } else if (outfit === 'shawl') {
       // 洋裝＋針織披肩：披肩是離身體 2 公分、厚 1.6 公分的一層，蓋住肩膀與上背，前面兩片斜斜交叉；前面中間一個胸針
       offset = () => 0.003;
@@ -5790,7 +5687,7 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
 
   // ---------- 袖子：沿 +y 的管子（肩膀在 0、手肘在 ARM_UP、手腕在 ARM_UP + ARM_FORE），切面一圈 N 點 ----------
   const ARM_UP = 0.35, ARM_FORE = 0.31, ARM_L = ARM_UP + ARM_FORE, N = 24;
-  // 每個角色的袖子輪廓：[y, 半徑, 部位, 皺褶量]；部位 'main' 是袖子的布、'cuff' 是露出來的襯衫袖口、'lining' 是袖口裡面、'skin' 是捲袖露出的前臂
+  // 每個角色的袖子輪廓：[y, 半徑, 部位, 皺褶量]；部位 'main' 是袖子的布、'cuff' 是露出來的襯衫袖口、'lining' 是袖口裡面
   function sleeveProfile(L) {
     const a = L.arm, out = L.outfit, P = [];
     const rUp = y => (0.05 + (0.043 - 0.05) * (y / ARM_UP)) * a;
@@ -5798,18 +5695,6 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
     const r = y => (y < ARM_UP ? rUp(y) : rFore(y)) * (out === 'mourning' && y < 0.1 ? 1 + 0.25 * smooth(0.1, 0, y) : 1);
     // 肩膀那頭收成圓頂（藏在身體的肩膀裡）
     P.push([-0.045, 0.001, 'main', 0], [-0.04, r(0) * 0.55, 'main', 0], [-0.025, r(0) * 0.86, 'main', 0]);
-    if (out === 'apron') {
-      // 捲袖：袖子捲到手肘上面一點，捲起來的那圈布比較厚；前臂是皮膚
-      const yr = ARM_UP + 0.035;
-      for (let y = -0.01; y < yr - 0.035; y += 0.01) P.push([y, r(y), 'main', 1]);
-      P.push([yr - 0.03, r(yr) + 0.006, 'main', 0.3], [yr - 0.02, r(yr) + 0.012, 'main', 0.2], [yr - 0.008, r(yr) + 0.013, 'main', 0.2], [yr + 0.002, r(yr) + 0.008, 'main', 0], [yr + 0.006, r(yr) * 0.8, 'skin', 0]);
-      for (let y = yr + 0.015; y <= ARM_L + 0.005; y += 0.012) {
-        const t = (y - yr) / (ARM_L - yr);
-        P.push([y, (0.039 - 0.017 * smooth(0, 1, t)) * a, 'skin', 0]);
-      }
-      P.push([ARM_L + 0.02, 0.015 * a, 'skin', 0]);
-      return P;
-    }
     for (let y = -0.01; y < ARM_L - 0.015; y += 0.01) P.push([y, r(y), 'main', 1]);
     // 袖口：有厚度，裡面是暗的；襯衫（或蕾絲）袖口從裡面露出來一點
     const rc = r(ARM_L) * 1.05;
@@ -5878,21 +5763,21 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
   }
 
   // ---------- 雕一個角色的身體（快取；跟頭共用排隊） ----------
-  // 格子大小：有一層厚約 1.1～1.2 公分的布（圍裙、披肩）要 6 公釐，格子再大，同一格裡會同時有布的內外兩面，
-  // 頂點被投影到相反的面、三角形翻過來，布上出現一個個小洞（7 公釐時屠夫 293 個、瘋婆 191 個翻面的三角形）；其他服裝用 7 公釐（三角形少約 27%）
-  const H_GRID = { suit: 0.007, mourning: 0.007, apron: 0.006, shawl: 0.006 };
+  // 格子大小：有一層厚約 1.1～1.2 公分的布（披肩）要 6 公釐，格子再大，同一格裡會同時有布的內外兩面，
+  // 頂點被投影到相反的面、三角形翻過來，布上出現一個個小洞（7 公釐時瘋婆 191 個翻面的三角形）；其他服裝用 7 公釐（三角形少約 27%）
+  const H_GRID = { suit: 0.007, mourning: 0.007, shawl: 0.006 };
   async function sculpt(spec) {
     const t0 = performance.now();
     SDF.startSlice();
     const L = layout(spec), S = shape(L), O = OUTFITS[L.outfit];
     // 雕到桌面下 40 公分（底部封起來）
-    // 前面依肚子大小留空間（屠夫的肚子加圍裙往前凸到 0.42）
+    // 前面依肚子大小留空間
     const lo = [-0.4, -0.43, -0.27], hi = [0.4, 0.62, Math.max(0.32, 0.075 + L.Dp + L.b.belly * 1.5 + 0.06)];
     const h = H_GRID[L.outfit] || 0.006;
     const { pos, idx } = await SDF.surfaceNets(S.sdf, lo, hi, h);
     const n = pos.length / 3;
     const nor = await SDF.project(pos, S.sdf, h);
-    // 看不到的三角形丟掉：被圍裙、披肩蓋住的身體表面與那層布的內面
+    // 看不到的三角形丟掉：被披肩蓋住的身體表面與那層布的內面
     const keep = [];
     for (let i = 0; i < idx.length; i += 3) {
       if ((i & 4095) === 0) await tick();
@@ -5903,7 +5788,7 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
     idx.length = 0;
     for (const v of keep) idx.push(v);
     const col = new Float32Array(n * 3), fab = new Float32Array(n * 3);
-    const fabOf = { main: 0, shirt: 1, cuff: 1, lace: 1, apron: 1, strap: 1, shawl: 1, tie: 2, button: 0, brooch: 0, blood: 1 };
+    const fabOf = { main: 0, shirt: 1, cuff: 1, lace: 1, shawl: 1, tie: 2, button: 0, brooch: 0 };
     for (let v = 0; v < n; v++) {
       if ((v & 1023) === 0) await tick();
       const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2], nx = nor[v * 3], ny = nor[v * 3 + 1], nz = nor[v * 3 + 2];
@@ -5914,12 +5799,7 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
       const c = [0, 0, 0];
       for (const [tag, w] of mix) {
         if (w <= 0) continue;
-        let cc = (S.col[tag] || S.col.main);
-        // 圍裙上的血：一團團、往下流
-        if (tag === 'apron') {
-          const bl = WK.fbm(x * 9 + 3, y * 6, z * 9, 3) + 0.25 * WK.fbm(x * 30, y * 4, z * 30, 2) - smooth(0.4, 0.0, y) * 0.15;
-          if (bl > 0.66) cc = cc.map((q, i) => q + (S.col.blood[i] - q) * Math.min(1, (bl - 0.66) * 6));
-        }
+        const cc = (S.col[tag] || S.col.main);
         for (let i = 0; i < 3; i++) c[i] += cc[i] * w;
         fab[v * 3 + (fabOf[tag] ?? 0)] += w;
       }
@@ -5934,7 +5814,7 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
     geo.setAttribute('fab', new T.BufferAttribute(fab, 3));
     geo.setIndex(n > 65535 ? new T.Uint32BufferAttribute(idx, 1) : new T.Uint16BufferAttribute(idx, 1));
     geo.computeBoundingSphere();
-    const mat = fabricMaterial(O.fab, O.scale, { rough: L.outfit === 'mourning' ? 0.75 : 0.92, dirt: L.outfit === 'apron' ? 0.9 : 0.5, bump: L.outfit === 'mourning' ? 0.3 : 0.6 });
+    const mat = fabricMaterial(O.fab, O.scale, { rough: L.outfit === 'mourning' ? 0.75 : 0.92, dirt: 0.5, bump: L.outfit === 'mourning' ? 0.3 : 0.6 });
     const sleeve = sleeveGeometry(L, S);
     return { spec, L, S, geo, mat, sleeve, stats: { verts: n, tris: idx.length / 3, sleeveTris: sleeve.index.count / 3, ms: Math.round(performance.now() - t0) } };
   }
@@ -6354,8 +6234,6 @@ const World = (() => {
     D.torso.geometry.dispose();
     D.torso.geometry = new T.LatheGeometry(torsoProfile(b), 32);
     D.torso.scale.z = 0.6 * b.d;
-    D.apron.visible = charId === 'butcher' && !D.bodyInst;
-    if (D.apron.visible) { D.apron.geometry.dispose(); D.apron.geometry = new T.LatheGeometry(torsoProfile(b, 1.02).slice(0, 6), 24, -0.95, 1.9); D.apron.scale.z = 0.6 * b.d; }
     if (WK.Body.cache[charId]) { if (D.bodyInst?.built !== WK.Body.cache[charId]) attachBody(WK.Body.cache[charId]); }
     else WK.Body.get(charId, spec).then(built => { if (my === headToken) attachBody(built); });
     D.shoulder[0].x = -0.24 * b.shoulder; D.shoulder[1].x = 0.24 * b.shoulder;
@@ -6377,7 +6255,7 @@ const World = (() => {
   function attachBody(built) {
     if (D.bodyInst) D.bodyInst.remove();
     D.bodyInst = WK.Body.instance(built, D.group, D.upper, HIP);
-    D.torso.visible = false; D.apron.visible = false; D.collar.visible = false;
+    D.torso.visible = false; D.collar.visible = false;
     for (const arm of D.arms) for (const k in arm) arm[k].visible = false;
   }
   // 雕好的頭接到莊家身上：骨頭掛在上半身與頭的轉軸，手指碰撞改用這顆頭的距離場
@@ -6448,12 +6326,6 @@ const World = (() => {
     const headPivot = new T.Group();
     headPivot.position.set(0, 0.62 - HIP.y, 0);
     upper.add(headPivot);
-    // 屠夫的圍裙：沾血的白布，蓋在胸前（只有屠夫顯示）
-    const apron = mesh(new T.BufferGeometry(), std(0xffffff, { map: tex.apron, roughness: 0.9, side: T.DoubleSide }));
-    apron.position.y = -HIP.y;
-    apron.visible = false;
-    upper.add(apron);
-    D.apron = apron;
 
     D.group = g; D.torso = torso; D.head = headPivot; D.upper = upper; D.bend = 0;
     D.hands = [buildHand(), buildHand()];
@@ -6731,7 +6603,7 @@ const World = (() => {
 
   const REST0 = [V(-0.27, 0, 0.42), V(0.27, 0, 0.42)];
   // 待機小動作：沒拿槍、沒用道具、沒被銬、槍放在桌上、沒在做表情時，每 6～14 秒一次；有事要做就馬上收手
-  const FIDGET_DUR = { tap: 2.4, veil: 3.0, knuckles: 3.4, sway: 3.4 };
+  const FIDGET_DUR = { tap: 2.4, veil: 3.0, sway: 3.4 };
   function fidgetIdle() {
     return !D.fidget.hold && !D.revive && !D.cuffed && D.grips[0] + D.grips[1] < 0.01 && !D.itemHold[0] && !D.itemHold[1] && gunPose === 'rest' && D.lean < 0.05 && D.group.visible && D.group.rotation.x === 0 && !D.feels.length;
   }
@@ -6745,11 +6617,11 @@ const World = (() => {
     }
     if (!idle || !D.persona.fidget) return;
     f.next -= dt;
-    if (f.next <= 0) { f.kind = D.persona.fidget; f.t = 0; f.dur = FIDGET_DUR[f.kind] || 2.5; f.cracks = 0; }
+    if (f.next <= 0) { f.kind = D.persona.fidget; f.t = 0; f.dur = FIDGET_DUR[f.kind] || 2.5; }
   }
   // 小動作的包絡：開頭 lead 秒進場、最後 lead 秒收回
   const fenv = (f, lead = 0.6) => sstep(0, lead, f.t) * (1 - sstep(f.dur - lead, f.dur, f.t)) * f.k;
-  // 小動作的手指：莊家右手四指輪流敲桌；屠夫兩手握拳再把手指一根根往後扳（喀啦）
+  // 小動作的手指：莊家右手四指輪流敲桌
   const fxOut = [[0, 0, 0, 0], [0, 0, 0, 0]];
   function fidgetFingers(i) {
     const f = D.fidget;
@@ -6762,17 +6634,6 @@ const World = (() => {
       for (let n = 0; n < 4; n++) {
         const ph = ((f.t * 2 - (3 - n) * 0.18) % 1 + 1) % 1;
         o[n] = -0.55 * e * Math.max(0, Math.sin(Math.min(1, ph / 0.35) * PI));
-      }
-      return o;
-    }
-    if (f.kind === 'knuckles') {
-      // 握拳（0.2～0.7 秒）→ 每根手指往後扳直（右手 1.0 秒起、左手 1.9 秒起，一根 0.18 秒）→ 放開
-      const fist = sstep(0.2, 0.7, f.t) * (1 - sstep(2.8, 3.3, f.t)) * f.k;
-      const t0 = i ? 1.0 : 1.9;
-      for (let n = 0; n < 4; n++) {
-        const a = t0 + n * 0.18, b = sstep(a, a + 0.1, f.t) * (1 - sstep(a + 0.25, a + 0.45, f.t));
-        o[n] = 1.5 * fist - (1.5 * fist + 0.25) * b;
-        if (b > 0.9 && f.cracks <= (i ? n : n + 4) && f.k > 0.5) { f.cracks = (i ? n : n + 4) + 1; SFX.play('crack'); }
       }
       return o;
     }
@@ -6804,8 +6665,8 @@ const World = (() => {
     const wristT = [], zhs = [], srcs = [], curls = [], poleOff = [], trig = [], fids = [];
     for (let i = 0; i < 2; i++) {
       const side = i ? 1 : -1;
-      // 個性的休息位置（屠夫兩手往前壓在桌上）只在沒事的時候；忙的時候用一般的位置（不然另一隻手搆不到，身體會被拉著往前傾）
-      // 被銬住時兩手併在身體前面（[x, y, z]，角色可以自己設：屠夫肚子大要放遠一點）
+      // 個性的休息位置只在沒事的時候；忙的時候用一般的位置（不然另一隻手搆不到，身體會被拉著往前傾）
+      // 被銬住時兩手併在身體前面（[x, y, z]，角色可以自己設：身體比較厚的要放遠一點）
       const cp = D.persona.cuffed || [0.042, 0.04, 0.4];
       const rest = D.cuffed ? V(side * cp[0], cp[1], cp[2]) : REST0[i].clone().lerp(D.rest[i], D.calm);
       D.restNow[i].copy(rest);
@@ -6836,7 +6697,7 @@ const World = (() => {
       if (fidgetQ) restQ.slerp(fidgetQ, fidgetW);
 
       let src = null, local = null, w = 0, curl = D.cuffed ? 1 : fidgetW * fidgetCurl;
-      // 手肘壓在桌上（屠夫）：手肘往外往下
+      // 手肘壓在桌上（persona.elbows，目前沒有角色用）：手肘往外往下
       const ep = D.persona.elbows, elbowPole = ep && !D.cuffed ? V(side * ep[0], ep[1], ep[2]) : null;
       const pole = V(side * 0.22, -0.28, -0.05);
       if (fidgetW > 0) pole.lerp(V(side * 0.45, -0.1, -0.1), fidgetW);
@@ -6905,7 +6766,7 @@ const World = (() => {
     // 第二步：手搆不到時，整個上半身往前趴過去（而不是把手臂拉長）
     const L = (ARM_UP + ARM_FORE) * 0.93;
     const selfAim = gunPose === 'dealerAimSelf' && Math.max(D.grips[0], D.grips[1]) > 0.5;
-    // 個性：瘋婆駝背、屠夫壓在桌上、寡婦挺直（被銬住、拿槍、急救時姿勢照舊）
+    // 個性：瘋婆駝背、寡婦挺直（被銬住、拿槍、急救時姿勢照舊）
     // 拿東西、決定開槍（槍還沒拿起來）時姿勢馬上收掉（駝背、壓桌時舉槍，槍管會頂進下巴）；
     // 兩手都回到休息位置後才慢慢恢復（手還在半路時就前傾，手腕會陷進身體）
     const busy = D.cuffed || D.revive || D.itemHold[0] || D.itemHold[1] || D.grips[0] + D.grips[1] > 0.01 || gunPose.startsWith('dealerAim');
@@ -8734,7 +8595,7 @@ const UI = (() => {
     step();
   }
   function hideSpeech() { speechToken++; clearTimeout(speechTimer); $('#speech').classList.remove('on'); World.dealerTalk(null); }
-  const CHAR_NAME = { dealer: '莊家', widow: '寡婦', butcher: '屠夫', crone: '瘋婆' };
+  const CHAR_NAME = { dealer: '莊家', widow: '寡婦', crone: '瘋婆' };
   // 道具 → 他用的時候講什麼
   const ITEM_LINE = { cigarettes: 'heal', saw: 'saw', handcuffs: 'cuff', magnifier: null, beer: 'beer', phone: 'phone', inverter: 'invert', adrenaline: 'steal', medicine: null };
   let lowSaid = { dealer: false, player: false };
@@ -9496,7 +9357,7 @@ const Settings = (() => {
   let cur = dft;
   try { cur = Object.assign({}, dft, JSON.parse(localStorage.getItem('dr-settings') || '{}')); } catch (e) { /* 用預設值 */ }
   // 舊版存的是膚色名字，換成角色
-  if (!['dealer', 'widow', 'butcher', 'crone'].includes(cur.skin)) cur.skin = 'dealer';
+  if (!['dealer', 'widow', 'crone'].includes(cur.skin)) cur.skin = 'dealer';
   // 選項改過（舊版的 1.25、2 不見了）就回到預設
   if (!['0.8', '1', '1.3', '1.6'].includes(cur.speed)) cur.speed = '0.8';
   return {
