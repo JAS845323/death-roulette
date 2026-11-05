@@ -40,7 +40,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--crt); outli
 #stage {
   position: absolute; left: 50%; top: 50%; width: 1280px; height: 800px;
   transform: translate(-50%, -50%) scale(var(--k));
-  overflow: hidden; font-family: var(--f-body); user-select: none;
+  /* 不裁切：黑畫面、閃光、選單底色要超出舞台鋪滿整個視窗（見下面的 --bleed） */
+  overflow: visible; font-family: var(--f-body); user-select: none;
+  /* 舞台是固定 1280×800 再縮放，視窗比例不同時左右（或上下）會多出來的寬度（換回舞台的像素） */
+  --bleed-x: max(0px, (100vw / var(--k) - 1280px) / 2);
+  --bleed-y: max(0px, (100vh / var(--k) - 800px) / 2);
 }
 #scene { position: absolute; inset: 0; }
 
@@ -80,15 +84,21 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--crt); outli
 #click-text.show { animation: clickTxt 1s; }
 @keyframes clickTxt { 0% { opacity: 1; transform: translateX(-50%) scale(1.3); } 100% { opacity: 0; transform: translateX(-50%) translateY(-30px); } }
 /* ---------- 字幕：白色像素字、黑色描邊，置中在畫面下方，沒有框 ---------- */
-#dialog, #speech { position: absolute; left: 50%; transform: translateX(-50%); width: 1100px; text-align: center; pointer-events: none; }
-#dialog { bottom: 40px; }
-#dialog-text { margin: 0; min-height: 1em; font-size: 36px; line-height: 1.2; color: #fff; text-shadow: var(--outline); }
-#speech { bottom: 92px; z-index: 52; opacity: 0; transition: opacity .35s; }
+/* 道具說明、莊家台詞、旁白由上往下疊在一起，底部對齊：哪一個變長都只會把上面的往上推，不會互相蓋住 */
+#subs { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); width: 1100px; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; z-index: 52; transition: bottom .3s; }
+/* 看子彈的時候子彈在畫面下半：字幕移到上面 */
+.subs-up #subs { bottom: 600px; }
+#dialog, #speech { text-align: center; pointer-events: none; }
+/* 照原版錄影：字幕是畫面下方中間一條黑色方框裡的白字（沒有字的時候框也收起來） */
+#dialog-text { display: inline-block; margin: 0; min-width: 460px; padding: 10px 36px; font-size: 28px; line-height: 1.3; color: #fff; background: #000; }
+#dialog-text:empty { display: none; }
+#speech { opacity: 0; transition: opacity .35s; }
 #speech.on { opacity: 1; transition: opacity .12s; }
-#speech .txt { font-size: 36px; line-height: 1.2; color: #fff; text-shadow: var(--outline); }
+#speech .txt { display: inline-block; min-width: 460px; padding: 10px 36px; font-size: 28px; line-height: 1.3; color: #fff; background: #000; }
+#speech .txt:empty { display: none; }
 #aim-hint { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); margin: 0; font-size: 24px; color: rgba(255, 255, 255, .7); text-shadow: var(--outline); pointer-events: none; display: none; white-space: nowrap; }
 .aiming #aim-hint { display: block; }
-#steal-cancel { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); pointer-events: auto; }
+#steal-cancel { position: absolute; right: 40px; bottom: 40px; pointer-events: auto; }
 
 #peek { position: absolute; left: 50%; top: 150px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 10px; animation: peekIn .4s; pointer-events: none; }
 .peek-label { font-family: var(--f-pixel); font-size: 48px; text-shadow: var(--outline); }
@@ -117,6 +127,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--crt); outli
 /* ---------- 覆蓋畫面 ---------- */
 .overlay { position: absolute; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; }
 .overlay[hidden] { display: none; }
+/* 轉場的黑畫面、閃光、紅光、血、各種選單的底色都鋪滿整個視窗（只蓋舞台的話，寬螢幕上會變成中間一塊黑色方塊、旁邊露出 3D 畫面） */
+#fx-flash, #fx-red, #fx-black, #fx-blood, .overlay { inset: calc(-1 * var(--bleed-y)) calc(-1 * var(--bleed-x)); }
 #title { background: radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, .25), rgba(0, 0, 0, .85) 75%); }
 .title-box { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .title-h { margin: 0; font-size: 144px; font-weight: 400; line-height: 1; letter-spacing: .08em; color: #fff; text-shadow: 4px 0 #000, -4px 0 #000, 0 4px #000, 0 -4px #000; }
@@ -212,8 +224,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--crt); outli
 .end-stats dd { margin: 0; font-family: var(--f-pixel); font-size: 24px; line-height: 1; }
 #btn-again { font-size: 18px; padding: 10px 34px; }
 
-/* 道具提示與飛行道具（在縮放舞台之外） */
-#tip { position: fixed; z-index: 100; padding: 0; font-family: var(--f-pixel); font-size: 24px; color: #fff; text-shadow: var(--outline); pointer-events: none; white-space: nowrap; }
+/* 道具說明：照原版在畫面下方中間（字幕那一疊的最上面），名稱大一點，說明小字（最多兩行） */
+#tip { width: 520px; padding: 0; font-family: var(--f-pixel); text-align: center; color: #fff; text-shadow: var(--outline); pointer-events: none; }
+#tip[hidden] { display: none; }
+/* 飛行道具（在縮放舞台之外） */
+#tip .tip-name { font-size: 28px; }
+#tip .tip-desc { margin-top: 4px; font-size: 18px; line-height: 1.35; color: #ddd; }
 .fly-item { position: fixed; z-index: 90; pointer-events: none; padding: 10px; filter: drop-shadow(0 20px 20px rgba(0, 0, 0, .8)); }
 .fly-item svg { width: 100%; height: 100%; }
 
@@ -283,8 +299,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--crt); outli
 .ld-ch:nth-child(6) { transform: rotate(-300deg); } .ld-ch:nth-child(6) b { animation-name: ld-b5; }
 @media (prefers-reduced-motion: reduce) { .ld-cyl, .ld-ch b { animation-duration: 9.6s; } }
 
+
+/* ---------- 開場：生死狀改放在桌上（3D，world/intro.js），這裡只留一條操作列 ---------- */
+/* 照原版：名字直接打在桌上的按鍵台上（輸入框看不見但還是收鍵盤）；難度、雙人連線、簽署留在畫面下方 */
+#waiver { align-items: flex-end; justify-content: center; padding-bottom: 22px; background: none; }
+#waiver .paper {
+  width: auto; max-width: 1040px; padding: 12px 18px; transform: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  background: rgba(6, 5, 5, .78); color: var(--bone); box-shadow: none; border: 1px solid rgba(228, 221, 198, .18);
+}
+#waiver .paper h2, #waiver .paper .en, #waiver .paper ol, #waiver .paper label[for="name"] { display: none; }
+#waiver #name { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+#waiver .table-hint { margin: 0; flex-basis: 100%; text-align: center; font-family: var(--f-pixel); font-size: 18px; letter-spacing: .08em; color: var(--bone); }
+#waiver .diff { margin: 0; grid-template-columns: auto auto; }
+#waiver .diff legend { display: none; }
+#waiver.overlay .diff label { padding: 6px 10px; border-color: rgba(228, 221, 198, .25); color: var(--bone); }
+#waiver .diff label:has(input:checked) { border-color: var(--bone); background: rgba(228, 221, 198, .1); }
+#waiver .diff input { border-color: var(--bone); }
+#waiver .diff small { display: none; }
+#waiver #waiver-error { margin: 0; min-height: 0; color: #ff8a7a; }
+#waiver .sign-row { margin-left: auto; }
+#waiver.overlay #btn-online { color: var(--bone); border-color: rgba(228, 221, 198, .4); }
+#waiver.overlay button[type="submit"] { background: var(--bone); color: #0a0b0a; border-color: var(--bone); }
+.table-hint { display: none; }
+#waiver .table-hint { display: block; }
+
 </style>
-<script>window.BUILD = { target: "web", at: "2026-11-03 23:27" };</script>
+<script>window.BUILD = { target: "web", at: "2026-11-05 13:24" };</script>
 </head>
 <body>
 <div id="viewport">
@@ -303,10 +343,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--crt); outli
     <div id="scene">
       <div id="click-text">*咔*</div>
 
-      <!-- 字幕：莊家的台詞在上、旁白在下，白色像素字加黑邊，逐字打出 -->
-      <div id="speech" aria-live="polite"><span class="txt"></span></div>
-      <div id="dialog" aria-live="polite">
-        <p id="dialog-text"></p>
+      <!-- 字幕：由上而下是道具說明、莊家的台詞、旁白，疊在畫面下方中間（不會互相蓋住），逐字打出 -->
+      <div id="subs">
+        <div id="tip" hidden></div>
+        <div id="speech" aria-live="polite"><span class="txt"></span></div>
+        <div id="dialog" aria-live="polite">
+          <p id="dialog-text"></p>
+        </div>
       </div>
       <p id="aim-hint">移動滑鼠瞄準 · 點一下開槍 · 右鍵放下</p>
       <button id="steal-cancel" type="button" hidden>放棄偷取</button>
@@ -341,6 +384,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--crt); outli
           <li>勝利者可帶走公事包內的全部現金。</li>
         </ol>
         <label for="name">簽名（A–Z，最多 6 個字母）</label>
+        <p class="table-hint">用鍵盤輸入名字（A–Z，最多 6 個字母），按 Enter 簽名</p>
         <input id="name" name="name" autocomplete="off" spellcheck="false" maxlength="6" placeholder="______">
         <fieldset class="diff">
           <legend>難度</legend>
@@ -452,7 +496,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--crt); outli
     </section>
 
   </div>
-  <div id="tip" hidden></div>
 </div>
 <script>
 /**
@@ -761,7 +804,7 @@ const SFX = (() => {
     shaper.curve = curve;
     const bassIn = ctx.createGain(); bassIn.connect(shaper); shaper.connect(syn);
     // 和弦：低通濾波器緩慢「呼吸」
-    const padF = ctx.createBiquadFilter(); padF.type = 'lowpass'; padF.frequency.value = 900; padF.Q.value = 0.5;
+    const padF = ctx.createBiquadFilter(); padF.type = 'lowpass'; padF.frequency.value = 1200; padF.Q.value = 0.5;
     const lfo = ctx.createOscillator(), lg = ctx.createGain();
     lfo.frequency.value = 0.09; lg.gain.value = 380; lfo.connect(lg); lg.connect(padF.frequency); lfo.start();
     padF.connect(syn);
@@ -831,11 +874,11 @@ const SFX = (() => {
     // 墊底和弦：每小節開頭，緩起緩收
     if (s === 0) {
       for (const m of ch.slice(1)) for (const d of [-7, 7]) {
-        tone(midi(m), beat * 4.2, { type: 'sawtooth', gain: 0.022, attack: beat * 1.2, at, dest: mus.pad, detune: d });
+        tone(midi(m), beat * 4.2, { type: 'sawtooth', gain: L === 0 ? 0.036 : 0.022, attack: beat * 1.2, at, dest: mus.pad, detune: d });
       }
     }
     // 低音
-    const bassHits = L === 0 ? [0, 10] : L === 1 ? [0, 3, 6, 10, 14] : L === 2 ? [0, 3, 6, 8, 10, 14] : [0, 2, 3, 6, 8, 10, 11, 14];
+    const bassHits = L === 0 ? [0, 6, 10] : L === 1 ? [0, 3, 6, 10, 14] : L === 2 ? [0, 3, 6, 8, 10, 14] : [0, 2, 3, 6, 8, 10, 11, 14];
     if (bassHits.includes(s)) {
       const oct = (s === 6 || s === 14) && L >= 1 ? 12 : 0;
       bassNote(midi(ch[0] + oct), beat * (L === 0 ? 1.6 : 0.42), at, L >= 4 ? 0.5 : 0.32, L);
@@ -859,7 +902,7 @@ const SFX = (() => {
     const arp = [ch[1] + 12, ch[2] + 12, ch[3] + 12, ch[2] + 24];
     if (L >= 3) {
       if (s % 2 === 0) pluck(midi(arp[(s / 2) % 4]), at, 0.035);
-    } else if ([0, 6, 12].includes(s) && (L >= 1 || s === 0)) {
+    } else if ([0, 6, 12].includes(s) && (L >= 1 || s !== 6)) {
       pluck(midi(arp[(s / 6 + bar) % 4]), at, L === 0 ? 0.03 : 0.025);
     }
     // 第三局：每兩小節一道刺耳的高音
@@ -898,25 +941,59 @@ const SFX = (() => {
   // ---------- 外部背景音樂（assets/bgm/，tools/music.py 切好的循環段） ----------
   // 每段音樂兩個 <audio> 交替播：播到循環終點時，另一個從循環起點（加上已經超過的時間）開始，交叉淡入。
   // 用串流播放而不是整首解碼成 AudioBuffer（整首解碼要上百 MB 記憶體，手機吃不消）。
-  // 雙擊 index.html（file://）時瀏覽器不讓 WebAudio 讀本機的音檔，就只用合成的。
+  // 雙擊 index.html（file://）時瀏覽器不讓 WebAudio 讀本機的音檔（接上去只會輸出靜音），
+  // 這時 <audio> 不接 WebAudio、直接出聲（direct），音量由 bgmTick 依各層增益算好寫進 el.volume。
   const LEVEL_TRACK = ['title', 'round12', 'round12', 'round3', 'round3cut'];
   const XF = 2.2;              // 循環接縫交叉淡入的秒數
   let bgm = null;
+  // ?direct 可以在 http 下模擬 file:// 的播放方式（測試用）
+  const direct = location.protocol === 'file:' || /[?&]direct\b/.test(location.search);
   const assetUrl = f => (window.ASSET_BASE || '') + f;
 
+  // direct 模式用的假 GainNode：gain 跟 AudioParam 一樣能排程（只用到 fade 與 bgmPlay 的幾種呼叫），value 依 ctx 時間算出來
+  function fakeGain() {
+    let base = 0, ev = [];
+    const at = now => {
+      let v = base, t0 = -Infinity;
+      for (const e of ev) {
+        if (e.t <= now) { v = e.v; t0 = e.t; continue; }
+        if (e.ramp && t0 > -Infinity) v += (e.v - v) * (now - t0) / (e.t - t0);
+        break;
+      }
+      return v;
+    };
+    return {
+      gain: {
+        get value() { return at(ctx.currentTime); },
+        set value(v) { base = v; ev = []; },
+        cancelScheduledValues() { base = at(ctx.currentTime); ev = []; },
+        setValueAtTime(v, t) { ev.push({ t, v, ramp: false }); },
+        linearRampToValueAtTime(v, t) { ev.push({ t, v, ramp: true }); },
+      },
+      connect() {},
+    };
+  }
+  // direct 模式：音樂匯流排上那幾層（總音量、開關、壓低、悶住）乘起來，換成 <audio> 的音量
+  function directVol() {
+    const muff = mus.muffle.frequency.value;
+    const m = muff >= 4000 ? 1 : Math.max(0.15, Math.log(muff / 120) / Math.log(4000 / 120));
+    return mus.bus.gain.value * mus.duck.gain.value * mus.fileIn.gain.value * master.gain.value * m;
+  }
+
   function initBgm() {
-    if (typeof MUSIC_DATA === 'undefined' || location.protocol === 'file:' || !window.Audio) return;
+    if (typeof MUSIC_DATA === 'undefined' || !window.Audio) return;
     bgm = { tracks: {}, active: null, timer: null };
     for (const [name, d] of Object.entries(MUSIC_DATA.loops)) {
-      const tr = { name, d, els: [], gains: [], cur: 0, ready: false, loaded: false, gain: ctx.createGain(), playing: false, switching: false };
+      const tr = { name, d, els: [], gains: [], cur: 0, ready: false, loaded: false, gain: direct ? fakeGain() : ctx.createGain(), playing: false, switching: false };
       tr.gain.gain.value = 0;
       tr.gain.connect(mus.fileIn);
       for (let k = 0; k < 2; k++) {
         const el = new Audio();
         el.preload = 'none';
         if (window.ASSET_BASE) el.crossOrigin = 'anonymous';
-        const g = ctx.createGain(); g.gain.value = 0;
-        try { ctx.createMediaElementSource(el).connect(g); } catch (e) { bgm = null; return; }
+        const g = direct ? fakeGain() : ctx.createGain(); g.gain.value = 0;
+        if (direct) el.volume = 0;
+        else try { ctx.createMediaElementSource(el).connect(g); } catch (e) { bgm = null; return; }
         g.connect(tr.gain);
         el.addEventListener('ended', () => { if (tr.playing && tr.cur === k) loopNow(tr); });
         tr.els.push(el); tr.gains.push(g);
@@ -973,6 +1050,13 @@ const SFX = (() => {
     if (p && p.then) p.then(go, () => { tr.switching = false; }); else go();
   }
   function bgmTick() {
+    if (direct) {
+      const v = directVol();
+      for (const tr of Object.values(bgm.tracks)) {
+        const tg = tr.gain.gain.value;
+        tr.els.forEach((el, k) => { el.volume = Math.max(0, Math.min(1, v * tg * tr.gains[k].gain.value)); });
+      }
+    }
     for (const tr of Object.values(bgm.tracks)) {
       if (!tr.playing || tr.switching) continue;
       const el = tr.els[tr.cur];
@@ -1000,10 +1084,34 @@ const SFX = (() => {
       tr.gains[1].gain.cancelScheduledValues(t); tr.gains[1].gain.value = 0;
       fade(tr.gain, 1, bgm.active ? 1.6 : 0.05);
       const p = el.play();
-      if (p && p.catch) p.catch(() => {});
+      if (p && p.catch) p.catch(() => playFailed(tr));
     } else fade(tr.gain, 1, 0.8);
     bgm.active = tr;
     return true;
+  }
+  // 瀏覽器擋下播放（不在點擊當下、或其他原因）：合成的接回來，下次點擊或按鍵再試一次外部音樂
+  let retryArmed = false;
+  function playFailed(tr) {
+    if (!tr.playing) return;
+    tr.playing = false;
+    fade(tr.gain, 0, 0.05);
+    if (bgm.active === tr) bgm.active = null;
+    if (mus.level >= 0 && LEVEL_TRACK[mus.level] === tr.name) {
+      mus.synth = true;
+      mus.syn.gain.cancelScheduledValues(ctx.currentTime);
+      mus.syn.gain.setTargetAtTime(1, ctx.currentTime, 0.2);
+    }
+    if (retryArmed) return;
+    retryArmed = true;
+    const retry = () => {
+      retryArmed = false;
+      window.removeEventListener('pointerdown', retry, true);
+      window.removeEventListener('keydown', retry, true);
+      if (ctx.state !== 'running') ctx.resume();
+      if (mus.level >= 0) music(mus.level);
+    };
+    window.addEventListener('pointerdown', retry, true);
+    window.addEventListener('keydown', retry, true);
   }
   function stopTrack(tr, sec) {
     tr.playing = false;
@@ -1020,9 +1128,15 @@ const SFX = (() => {
   const stingBufs = {};
   let stingOut = null;
   function loadStings() {
-    if (typeof MUSIC_DATA === 'undefined' || location.protocol === 'file:') return;
+    if (typeof MUSIC_DATA === 'undefined') return;
     stingOut = ctx.createGain(); stingOut.gain.value = musicOff ? 0 : 1; stingOut.connect(master);
     for (const [name, d] of Object.entries(MUSIC_DATA.stings)) {
+      // file:// 讀不到檔案內容，改用 <audio> 直接播（沒有低通，用音量代替）
+      if (direct) {
+        const el = new Audio(assetUrl(d.file)); el.preload = 'auto';
+        el.addEventListener('canplaythrough', () => { stingBufs[name] = el; }, { once: true });
+        continue;
+      }
       fetch(assetUrl(d.file)).then(r => r.arrayBuffer()).then(ab => new Promise((res, rej) => {
         const p = ctx.decodeAudioData(ab, res, rej);
         if (p && p.then) p.then(res, rej);
@@ -1034,6 +1148,14 @@ const SFX = (() => {
   function sting(name, { gain = 1, delay = 0, mark = 0, lp = 0, attack = 0 } = {}) {
     if (!ctx || muted || !stingBufs[name]) return false;
     const off = Math.max(0, mark - delay), when = ctx.currentTime + Math.max(0, delay - mark);
+    if (direct) {
+      if (musicOff) return true;
+      const el = stingBufs[name].cloneNode();
+      el.volume = Math.max(0, Math.min(1, gain * master.gain.value * (lp > 0 ? 0.6 : 1)));
+      el.currentTime = off;
+      setTimeout(() => { const p = el.play(); if (p && p.catch) p.catch(() => {}); }, Math.max(0, delay - mark) * 1000);
+      return true;
+    }
     const src = ctx.createBufferSource(); src.buffer = stingBufs[name];
     const g = ctx.createGain();
     if (attack > 0) { g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(gain, when + attack); } else g.gain.value = gain;
@@ -1237,12 +1359,6 @@ const SFX = (() => {
     // 輪到莊家：低沉、悶悶的一聲，起音放慢一點，不要嚇人
     dealerturn() { tone(100, 0.75, { to: 50, gain: 0.2, attack: 0.04, wet: 0.6 }); noise(0.4, { freq: 320, to: 100, gain: 0.12, attack: 0.05, wet: 0.4 }); },
     victory() { [62, 65, 69, 74].forEach((m, i) => tone(midi(m), 1.4 - i * 0.2, { type: 'triangle', gain: 0.08, when: i * 0.16, wet: 0.7 })); },
-    // 死神現身：低沉的風聲與合唱般的嗡鳴
-    reaper() {
-      noise(2.2, { type: 'bandpass', freq: 220, to: 900, q: 1.2, gain: 0.3, attack: 0.6, wet: 1 });
-      [146.8, 174.6, 220].forEach((f, i) => tone(f, 2.6, { type: 'triangle', gain: 0.035, attack: 0.9, wet: 1, detune: i * 6 - 6 }));
-      tone(55, 2.4, { type: 'sawtooth', gain: 0.08, attack: 0.5, wet: 0.6 });
-    },
     // 擲硬幣：彈指的金屬聲與旋轉的嗡鳴；落地兩聲叮
     coin() {
       tone(3100, 0.25, { type: 'triangle', gain: 0.12, wet: 0.5 });
@@ -1758,6 +1874,7 @@ const Game = {
   async dealItems(k) {
     const s = this.s, pool = ITEM_POOL[s.round];
     SFX.play('itembox');
+    await UI.itemBox(true);
     UI.say(`道具箱打開了。每人拿到 ${k} 個道具。`);
     for (let i = 0; i < k; i++) {
       // 雙人時固定先發給開房的人，兩邊抽亂數的順序才一致
@@ -1766,11 +1883,12 @@ const Game = {
         if (slot < 0) continue;
         s.items[side][slot] = pool[Math.floor(rand() * pool.length)];
         UI.renderItems(s);
-        await sleep(230);
+        await sleep(330);
       }
     }
     if (s.items.player.every(Boolean)) UI.say('你的道具欄已經滿了。');
     await sleep(400);
+    await UI.itemBox(false);
   },
 
   nextTurn() {
@@ -2090,8 +2208,8 @@ const Game = {
     const over = s.wins[winner] >= 2;
     if (who === 'dealer') {
       await UI.dealerDown();
-      // 對手那邊正在看自己被電回來；這邊看死神拿除顫器把他電回來，不用乾等
-      if (!over) await UI.reaperRevive();
+      // 對手那邊正在看自己被電回來；這邊看他那一側的電擊板把他電回來，不用乾等
+      if (!over) await UI.oppRevive();
     } else { if (!over) s.stats.revives++; await UI.blackout(!over); }
     if (over) return UI.showEnd(winner === 'player', s);
     await UI.say(who === 'dealer'
@@ -3382,9 +3500,12 @@ const WK = (() => {
     draw(g, w, h);
     const t = new T.CanvasTexture(c);
     if (srgb) t.encoding = T.sRGBEncoding;
-    // 跟原版一樣不做 mipmap 模糊：最近點取樣，貼圖的細節直接變成畫面上的像素
-    t.magFilter = t.minFilter = T.NearestFilter;
-    t.generateMipmaps = false;
+    // 全解析度算圖之後（scene.js RETRO_H），最近點取樣、不做 mipmap 會在遠處閃爍、出現摩爾紋，看起來很粗糙；
+    // 原版的貼圖是平滑的：改成線性＋mipmap＋各向異性過濾（斜看的桌面才不會糊）
+    t.magFilter = T.LinearFilter;
+    t.minFilter = T.LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.anisotropy = 8;
     if (rep) { t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep[0], rep[1]); }
     return t;
   }
@@ -3461,26 +3582,30 @@ const WK = (() => {
       grain(g, w, h, 44);
     }, [3, 3]);
 
-    // 桌面：照原版，灰綠／橄欖綠的舊毛氈，上面一大塊一大塊不規則的紅褐色鏽斑與污漬（好幾層雜訊疊出來），
-    // 再用米白的漆畫線（有磨損、斷斷續續）：外框、中線、兩側的半圓、兩端籃球場一樣的弧線、
-    // 雙方左右各一個 2×2 道具格（對齊 room.js 的 slotPos）、右側中段 8 格的子彈框（對齊 scene.js 的 SHELL_BOX）
+    // 桌面：照原版，灰綠／橄欖綠的舊毛氈，上面佈滿細碎、邊緣破碎的灰紫褐污斑（跟布差不多亮，不是一大塊深紅；好幾層雜訊疊出來），
+    // 再用米白的漆畫線（有磨損、斷斷續續）。照原版錄影：外框、中線、中間一個大圓、兩端中間各一個框、右側中段 8 格的子彈框；
+    // 雙方左右各一個 2×2 道具格（對齊 room.js 的 slotPos）要等開始發道具才出現——所以做兩張：tex.tableBare（沒有道具格）與 tex.table
     // 畫布座標 = 桌面上的 (x, z)：x -TABLE.x～TABLE.x 對到 0～w、z TABLE.z0（莊家那端）～TABLE.z1（玩家那端）對到 0～h
     const TB = WK.TABLE;
-    tex.table = canvasTex(1024, Math.round(1024 * (TB.z1 - TB.z0) / (2 * TB.x)), (g, w, h) => {
-      const X = x => (x + TB.x) / (2 * TB.x) * w, Z = z => (z - TB.z0) / (TB.z1 - TB.z0) * h, S = m => m / (2 * TB.x) * w;
+    const TW = 1536, TH = Math.round(1536 * (TB.z1 - TB.z0) / (2 * TB.x));
+    const felt = document.createElement('canvas'); felt.width = TW; felt.height = TH;
+    ((g, w, h) => {
+      const S = m => m / (2 * TB.x) * w;
       // 毛氈與鏽：逐像素
       const img = g.createImageData(w, h), d = img.data, sc = 1 / S(1);
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         const mx = x * sc, mz = y * sc;
         // 布的明暗（大片）、布紋（細的橫豎紋）
-        const base = 0.86 + 0.28 * (fbm2(mx * 2.2, mz * 2.2, 3) - 0.5) + 0.05 * (noise2(x * 0.5, y * 0.07) - 0.5);
-        let r = 70 * base, gg = 84 * base, b = 58 * base;
-        // 鏽斑：低頻雜訊過門檻，邊緣用高頻雜訊打碎；裡面再分深淺
-        const st = fbm2(mx * 3.1 + 40, mz * 3.1, 4) + 0.22 * (noise2(mx * 26, mz * 26) - 0.5);
-        const k = Math.min(1, Math.max(0, (st - 0.52) / 0.07));
+        // 全解析度看得到布的細節：再疊一層很細的顆粒（原版的布是好幾層大小不同的斑點，不是平的一塊）
+        const base = 0.86 + 0.22 * (fbm2(mx * 2.2, mz * 2.2, 3) - 0.5) + 0.05 * (noise2(x * 0.5, y * 0.07) - 0.5) + 0.16 * (noise2(mx * 120, mz * 120) - 0.5);
+        let r = 72 * base, gg = 84 * base, b = 62 * base;
+        // 污斑：中頻雜訊過門檻決定哪裡多，高頻雜訊把邊緣打成細碎的顆粒；顏色是比布稍暗的灰紫褐，裡面再分深淺
+        // 照原版錄影：不是一塊塊邊緣清楚的斑，而是綠與灰紫粉細細交錯的斑駁（頻率高、邊緣軟、顆粒多）
+        const st = fbm2(mx * 9 + 40, mz * 9, 4) + 0.55 * (noise2(mx * 48, mz * 48) - 0.5) + 0.35 * (noise2(mx * 130 + 9, mz * 130) - 0.5);
+        const k = Math.min(1, Math.max(0, (st - 0.48) / 0.14));
         if (k > 0) {
           const deep = fbm2(mx * 9 + 7, mz * 9, 2);
-          const rr = 70 - 24 * deep, rg = 44 - 14 * deep, rb = 40 - 12 * deep;
+          const rr = 86 - 16 * deep, rg = 64 - 12 * deep, rb = 70 - 12 * deep;
           r += (rr - r) * k; gg += (rg - gg) * k; b += (rb - b) * k;
         }
         // 小污點、黑色的油漬
@@ -3492,19 +3617,27 @@ const WK = (() => {
         d[i] = r; d[i + 1] = gg; d[i + 2] = b; d[i + 3] = 255;
       }
       g.putImageData(img, 0, 0);
+    })(felt.getContext('2d'), TW, TH);
+    const tableLines = (g, w, h, grid) => {
+      const X = x => (x + TB.x) / (2 * TB.x) * w, Z = z => (z - TB.z0) / (TB.z1 - TB.z0) * h, S = m => m / (2 * TB.x) * w, sc = 1 / S(1);
+      g.drawImage(felt, 0, 0);
       // 白漆線：先畫在另一張畫布，用雜訊挖出磨損的缺口，再蓋回桌面
       const lc = document.createElement('canvas'); lc.width = w; lc.height = h;
       const l = lc.getContext('2d');
-      l.strokeStyle = '#ddd0b0'; l.lineWidth = S(0.011); l.lineCap = 'square';
+      l.strokeStyle = '#e2d6b8'; l.lineWidth = S(0.014); l.lineCap = 'square';
       const line = (x0, z0, x1, z1) => { l.beginPath(); l.moveTo(X(x0), Z(z0)); l.lineTo(X(x1), Z(z1)); l.stroke(); };
       const rect = (x0, z0, x1, z1) => l.strokeRect(X(x0), Z(z0), X(x1) - X(x0), Z(z1) - Z(z0));
       const EX = TB.x - 0.08, EZ0 = TB.z0 + 0.07, EZ1 = TB.z1 - 0.07;
       rect(-EX, EZ0, EX, EZ1);
-      line(-EX, 0, EX, 0);
-      // 中線兩端的半圓（籃球場的罰球圈那樣貼著外框）
-      for (const sx of [-1, 1]) { l.beginPath(); l.arc(X(sx * EX), Z(0), S(0.14), sx < 0 ? -PI / 2 : PI / 2, sx < 0 ? PI / 2 : PI * 1.5); l.stroke(); }
+      // 中線：照原版碰到子彈框就停（不穿過框）
+      const SB = TB.shellBox, SBX1 = SB.x0 + 8 * SB.cell, SBP = 0.012;
+      line(-EX, 0, SB.x0 - SBP, 0); line(SBX1 + SBP, 0, EX, 0);
+      // 中間一個大圓（比其他線細、淡一點）
+      l.save(); l.globalAlpha = 0.75; l.lineWidth = S(0.01);
+      l.beginPath(); l.arc(X(0), Z(0), S(0.6), 0, PI * 2); l.stroke();
+      l.restore();
       // 道具格：每一側左右兩個 2×2，格子 cw×cd，中心在 slotPos；外側的線一路畫到外框
-      for (const side of ['player', 'dealer']) for (const sx of [-1, 1]) {
+      if (grid) for (const side of ['player', 'dealer']) for (const sx of [-1, 1]) {
         const [r0, r1] = TB.rows[side], sz = Math.sign(r0);
         const za = r0 - sz * TB.cd[side] / 2, zb = r1 + sz * TB.cd[side] / 2, zm = (r0 + r1) / 2;
         const xa = sx * (TB.slotX - TB.cw / 2), xb = sx * (TB.slotX + 1.5 * TB.cw), xm = sx * (TB.slotX + TB.cw / 2);
@@ -3512,19 +3645,20 @@ const WK = (() => {
         line(xm, za, xm, zb); line(xa, zm, xb, zm);
         line(xa, zb, xa, sz > 0 ? EZ1 : EZ0); line(xb, zb, xb, sz > 0 ? EZ1 : EZ0);
       }
-      // 兩端中間的小框（槍、雙手放的地方）與框外的弧線
-      for (const sz of [-1, 1]) {
-        const ze = sz > 0 ? EZ1 : EZ0, zi = ze - sz * 0.14;
-        rect(-0.16, Math.min(ze, zi), 0.16, Math.max(ze, zi));
-        l.beginPath(); l.arc(X(0), Z(ze), S(0.3), sz > 0 ? PI : 0, sz > 0 ? 2 * PI : PI); l.stroke();
-      }
-      // 子彈框：8 格
-      const SB = TB.shellBox;
+      // 兩端中間的框：你這端大（放道具箱的地方），莊家那端小；有道具格時你這端的框收窄到兩組格子中間
+      const nx = grid ? 0.15 : 0.26;
+      rect(-nx, EZ1 - 0.3, nx, EZ1 - 0.035);
+      rect(-0.13, EZ0, 0.13, EZ0 + 0.08);
+      // 子彈框：照原版是外面一圈框、裡面 8 個分開的長槽（槽底比布暗，像凹下去）
       l.lineWidth = S(0.008);
-      rect(SB.x0, SB.z0, SB.x0 + 8 * SB.cell, SB.z1);
-      for (let i = 1; i < 8; i++) line(SB.x0 + i * SB.cell, SB.z0, SB.x0 + i * SB.cell, SB.z1);
+      rect(SB.x0 - SBP, SB.z0 - SBP, SBX1 + SBP, SB.z1 + SBP);
+      const gap = 0.006;
+      for (let i = 0; i < 8; i++) {
+        const xa = SB.x0 + i * SB.cell + gap / 2, xb = SB.x0 + (i + 1) * SB.cell - gap / 2;
+        g.fillStyle = 'rgba(14,10,10,.75)'; g.fillRect(X(xa), Z(SB.z0), X(xb) - X(xa), Z(SB.z1) - Z(SB.z0));
+        rect(xa, SB.z0, xb, SB.z1);
+      }
       // 磨損：沿線挖掉一段段、一點點
-      l.globalCompositeOperation = 'destination-out';
       const ld = l.getImageData(0, 0, w, h), q = ld.data;
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         const i = (y * w + x) * 4 + 3;
@@ -3538,7 +3672,9 @@ const WK = (() => {
       const v = g.createRadialGradient(w / 2, h / 2, h * 0.32, w / 2, h / 2, h * 0.62);
       v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(10,6,4,.35)');
       g.fillStyle = v; g.fillRect(0, 0, w, h);
-    });
+    };
+    tex.table = canvasTex(TW, TH, (g, w, h) => tableLines(g, w, h, true));
+    tex.tableBare = canvasTex(TW, TH, (g, w, h) => tableLines(g, w, h, false));
 
     // 木頭（槍托、護木、桌框）：紅褐色、清楚的木紋與一兩個木節，邊緣被手摸得比較深
     tex.wood = canvasTex(256, 256, (g, w, h) => {
@@ -3595,6 +3731,13 @@ const WK = (() => {
       gr.addColorStop(0, 'rgba(255,255,240,1)');
       gr.addColorStop(.2, 'rgba(255,240,200,.6)');
       gr.addColorStop(1, 'rgba(255,220,160,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, w, w);
+    });
+
+    // 圓圓的一滴（血滴、碎屑）：實心、邊緣稍微柔一點
+    tex.drop = canvasTex(64, 64, (g, w) => {
+      const gr = g.createRadialGradient(w / 2, w / 2, w * 0.36, w / 2, w / 2, w / 2);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = gr; g.fillRect(0, 0, w, w);
     });
 
@@ -3666,8 +3809,10 @@ const WK = (() => {
     M.coat = std(0x030303, { roughness: 1 });
     M.shirt = std(0x1c1a16, { roughness: 0.9 });
     M.teeth = std(0xd6cca8, { roughness: 0.35 });
-    M.table = std(0xffffff, { map: tex.table, roughness: 0.85 });
-    M.rim = std(0xffffff, { map: tex.wood, roughness: 0.65, color: 0x8a6458 });
+    // 開場與第一次發道具之前是沒有道具格的桌面（scene.js 的 setGrid 換貼圖）
+    // 顏色乘一點暗紅：跟原版錄影量過，桌布中段的平均亮度、紅綠比才對得上
+    M.table = std(0xebd9d4, { map: tex.tableBare, roughness: 0.85 });
+    M.rim = std(0xffffff, { map: tex.wood, roughness: 0.65, color: 0x6e4a50 });
     M.wall = std(0xffffff, { map: tex.wall, roughness: 0.8 });
     M.floor = std(0xffffff, { map: tex.floor, roughness: 0.9 });
     M.ceil = std(0x0d0e0d, { roughness: 1 });
@@ -3683,7 +3828,8 @@ const WK = (() => {
 // 桌上的除顫器：照原版做成一台生鏽的深色鐵盒
 // 前面幾乎直立的大黑螢幕（淡綠白的像素字：左上是莊家（對手）名字、右邊是玩家名字，中間幾條分隔線，名字下面是閃電＝電量），
 // 頂上四個有直紋的接頭插著粗黑電纜，往後彎進一根生鏽的管子
-// buildDefib() 回傳 { group, screen }；螢幕內容用 drawDefib(state) 重畫，斷電時換 defibDeadTex()／閃雜訊用 defibStaticTex()
+// buildDefib() 回傳 { group, screen, draw, liveTex }：每台各自的螢幕，內容用 draw(state) 重畫（state.cut＝線路切斷，電量照樣畫）；
+// 斷電那一下閃 defibDeadTex()／雜訊 defibStaticTex()（共用）
 (() => {
   const { T, V, PI, env, std, mesh, canvasTex, grain, blot, R } = WK;
 
@@ -3745,6 +3891,11 @@ const WK = (() => {
   function bolt(g, x, y, u) {
     BOLT.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') g.fillRect(x + i * u, y + j * u, u, u); });
   }
+  // 像素骷髏（9×9 格）：第三局（最後一局）的標記
+  const SKULL = ['..#####..', '.#######.', '##.###.##', '#...#...#', '##.###.##', '.#######.', '..#.#.#..', '..#####..', '...#.#...'];
+  function skull(g, x, y, u) {
+    SKULL.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') g.fillRect(x + i * u, y + j * u, u, u); });
+  }
   const blank = g => { g.fillStyle = '#000'; g.fillRect(0, 0, SCR_W, SCR_H); };
   // 字的邊緣：亮的留下、暗的去掉（畫布的字一定有反鋸齒）
   function crisp(g) {
@@ -3760,7 +3911,22 @@ const WK = (() => {
     blank(g);
     g.fillStyle = INK;
     const LY = 44, DX = Math.round(w * 0.4), line = (x, y, lw, lh) => g.fillRect(x, y, lw, lh);
-    if (!st) {
+    if (st && st.rounds) {
+      // 每局開頭：照原版錄影，上排 I、II、骷髏三個局數，下排三個圓圈；打完的局塗滿，這一局的圈中間一個點
+      const r = st.rounds, xs = [0.26, 0.5, 0.74].map(f => Math.round(w * f));
+      g.font = FONT(36); g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('I', xs[0], 36); g.fillText('II', xs[1], 36);
+      skull(g, xs[2] - 18, 18, 4);
+      for (let k = 0; k < 3; k++) {
+        g.beginPath(); g.arc(xs[k], 90, 16, 0, PI * 2); g.lineWidth = 4; g.strokeStyle = INK; g.stroke();
+        if (k + 1 < r) { g.beginPath(); g.arc(xs[k], 90, 10, 0, PI * 2); g.fill(); }
+        else if (k + 1 === r) g.fillRect(xs[k] - 4, 86, 8, 8);
+      }
+    } else if (st && st.win) {
+      // 照原版：有人倒下時整片只顯示「名字 獲勝！」
+      g.font = FONT(st.win.length > 4 ? 30 : 36); g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(`${st.win} 獲勝！`, w / 2, h / 2);
+    } else if (!st) {
       // 待機：一條心電圖（像素階梯）
       let y = 70;
       for (let x = 12; x < w - 12; x += 2) {
@@ -3773,9 +3939,13 @@ const WK = (() => {
       const r = Math.max(1, Math.min(3, st.round || 1));
       for (let k = 0; k < r; k++) line(Math.round(w * 0.34) + k * 18, LY - 18, 3, 18);
       line(DX, LY, 3, h - LY - 26);
-      g.font = FONT(24); g.textBaseline = 'alphabetic';
-      g.textAlign = 'left'; g.fillText(String(st.dealerName).slice(0, 4), 10, LY - 8);
-      g.textAlign = 'right'; g.fillText(String(st.playerName).slice(0, 6), w - 10, LY - 8);
+      // 名字最多 6 個字母：左邊的名字要讓出局數的短豎線，太長就換小一號的字
+      const dn = String(st.dealerName).slice(0, 6), pn = String(st.playerName).slice(0, 6);
+      g.textBaseline = 'alphabetic';
+      g.font = FONT(24);
+      if (g.measureText(dn).width > w * 0.34 - 16) g.font = FONT(12);
+      g.textAlign = 'left'; g.fillText(dn, 10, LY - 8);
+      g.font = FONT(24); g.textAlign = 'right'; g.fillText(pn, w - 10, LY - 8);
       // 閃電：莊家的在左欄上面、玩家的在右欄下面靠右（跟原版一樣）；被扣掉的就不畫（drain 讓它閃幾下再消失）
       const n = st.max, u = n > 5 ? 2 : n > 4 ? 3 : 4, bw = 7 * u + 3;
       for (let i = 0; i < Math.min(n, st.dealer); i++) bolt(g, 10 + i * bw, LY + 8, u);
@@ -3785,22 +3955,23 @@ const WK = (() => {
         if (st.cuffed.dealer) g.fillText('[銬住]', 10, h - 10);
         if (st.cuffed.player) g.fillText('[銬住]', DX + 10, LY + 22);
       }
+      // 第三局線路被切斷：電量照樣顯示，右上角標「LINE CUT」，畫面上撒幾條斷掉的掃描線
+      if (st.cut) {
+        g.font = FONT(12); g.textAlign = 'left';
+        g.fillText('LINE CUT', DX + 10, h - 10);
+        g.fillStyle = '#000';
+        for (let k = 0; k < 5; k++) {
+          const y = 8 + ((k * 37 + (st.dealer * 11 + st.player * 7) * 13) % (h - 16));
+          g.fillRect(((k * 53) % 60) + 4, y, w - 8 - ((k * 71) % 90), 2);
+        }
+      }
     }
     crisp(g);
   }
-  let liveTex = null, liveG = null, lastKey = '', lastSt = null;
-  function drawDefib(st) {
-    const key = JSON.stringify(st);
-    if (key === lastKey) return;
-    lastKey = key; lastSt = st;
-    drawScreen(liveG, st);
-    liveTex.needsUpdate = true;
-  }
-  // 像素字型晚一點才載入完：載入後重畫一次
-  if (document.fonts && document.fonts.load) document.fonts.load('24px Cubic11').then(() => { if (liveG) { lastKey = ''; drawDefib(lastSt); } }, () => {});
-  // 斷電：像素字 NO POWER；閃雜訊用的雪花（粗格子）
+  // 斷電：像素字 NO POWER（斷電的那一下閃）；閃雜訊用的雪花（粗格子）。所有除顫器共用
   let deadTex = null, staticTex = null;
   function makeOther() {
+    if (deadTex) return;
     deadTex = canvasTex(SCR_W, SCR_H, g => {
       blank(g);
       g.fillStyle = INK; g.textAlign = 'center';
@@ -3876,12 +4047,22 @@ const WK = (() => {
       const frame = mesh(fgeo, paint);
       frame.position.z = -0.003; face.add(frame);
     }
+    // 每台各自一張畫布（雙人時兩台各畫各的）
     const c = document.createElement('canvas'); c.width = SCR_W; c.height = SCR_H;
-    liveG = c.getContext('2d');
-    liveTex = new T.CanvasTexture(c); liveTex.encoding = T.sRGBEncoding;
+    const liveG = c.getContext('2d', { willReadFrequently: true });
+    const liveTex = new T.CanvasTexture(c); liveTex.encoding = T.sRGBEncoding;
     liveTex.magFilter = liveTex.minFilter = T.NearestFilter; liveTex.generateMipmaps = false;
-    lastKey = '';
-    drawDefib(null);
+    let lastKey = '', lastSt = null;
+    const draw = st => {
+      const key = JSON.stringify(st);
+      if (key === lastKey) return;
+      lastKey = key; lastSt = st;
+      drawScreen(liveG, st);
+      liveTex.needsUpdate = true;
+    };
+    draw(null);
+    // 像素字型晚一點才載入完：載入後重畫一次
+    if (document.fonts && document.fonts.load) document.fonts.load('24px Cubic11').then(() => { lastKey = ''; draw(lastSt); }, () => {});
     makeOther();
     const screen = new T.Mesh(new T.PlaneGeometry(SW, SH), new T.MeshBasicMaterial({ map: liveTex, toneMapped: false }));
     screen.position.set(0, 0, 0.0004); face.add(screen);
@@ -3895,7 +4076,8 @@ const WK = (() => {
     for (const x of [-W / 2 + 0.014, W / 2 - 0.014]) for (const z of [BZ + 0.014, SZ - 0.012]) screw(x, Y1 + 0.0015, z);
 
     // ---------- 頂上的四個接頭與電纜 ----------
-    const pipeZ = BZ - 0.035, pipeY = 0.07;
+    // 管子架在桌框上方（桌框頂 5 公分＝縮放後約 0.077），不穿進桌框
+    const pipeZ = BZ - 0.035, pipeY = 0.1, LEG0 = 0.077;
     // 絕緣端子：一圈圈橫紋的圓柱（像礙子），越上面越細
     const ribGeo = (() => {
       const pts = [];
@@ -3928,13 +4110,13 @@ const WK = (() => {
     for (const sx of [-1, 1]) {
       const flange = mesh(new T.CylinderGeometry(0.024, 0.024, 0.01, 16), rust);
       flange.rotation.z = PI / 2; flange.position.set(sx * (W / 2 + 0.06), pipeY, pipeZ); g.add(flange);
-      const leg = mesh(new T.BoxGeometry(0.012, pipeY, 0.03), rust);
-      leg.position.set(sx * (W / 2 - 0.02), pipeY / 2, pipeZ); g.add(leg);
+      const leg = mesh(new T.BoxGeometry(0.012, pipeY - LEG0, 0.03), rust);
+      leg.position.set(sx * (W / 2 - 0.02), (pipeY + LEG0) / 2, pipeZ); g.add(leg);
     }
-    return { group: g, screen };
+    return { group: g, screen, draw, liveTex };
   }
 
-  Object.assign(WK, { buildDefib, drawDefib, defibLiveTex: () => liveTex, defibDeadTex: () => deadTex, defibStaticTex: () => staticTex });
+  Object.assign(WK, { buildDefib, defibDeadTex: () => deadTex, defibStaticTex: () => staticTex });
 })();
 
 </script>
@@ -4035,7 +4217,7 @@ const WK = (() => {
     return flat(new T.TubeGeometry(new T.CatmullRomCurve3(pts), 32, r, 6, false), mat);
   }
   // 舞台聚光燈：黑色圓筒燈身、後蓋、散熱片、前面鏡片、四片往外張的遮光扉、U 形吊架；aim 是燈要照的地方
-  function stageLight(at, aim, lensMat, mats) {
+  function stageLight(at, aim, lensMat, mats, spin = 0) {
     const { body: bodyM, dark, ring: ringM } = mats;
     const g = new T.Group();
     g.position.copy(at);
@@ -4049,19 +4231,21 @@ const WK = (() => {
     back.rotation.x = PI / 2; back.position.z = -0.19; body.add(back);
     for (let i = 0; i < 4; i++) { const fin = flat(new T.TorusGeometry(0.135, 0.008, 4, 28), dark); fin.position.z = -0.1 + i * 0.04; body.add(fin); }
     // 前框：一圈厚厚的環，裡面是有一點反光的鏡片（跟吊燈共用材質：斷電、閃爍會一起暗）
-    const ring = flat(new T.TorusGeometry(0.12, 0.022, 8, 28), ringM);
+    const ring = flat(new T.TorusGeometry(0.122, 0.011, 6, 28), ringM);
     ring.position.z = 0.152; body.add(ring);
     const lens = new T.Mesh(new T.CircleGeometry(0.11, 28), lensMat);
-    lens.position.z = 0.148; body.add(lens);
+    // 鏡片在燈身前蓋（z 0.15）外面一點點，不然被前蓋擋住
+    lens.position.z = 0.153; body.add(lens);
     // 遮光扉：上下左右各一片，鉸鍊在前框外緣，往外張開
     for (let k = 0; k < 4; k++) {
       const hinge = new T.Group();
-      hinge.rotation.z = k * PI / 2;
+      hinge.rotation.z = k * PI / 2 + spin;
       hinge.position.z = 0.16;
       body.add(hinge);
       const tilt = new T.Group();
       tilt.position.y = 0.14;
-      tilt.rotation.x = -0.5 - (k % 2) * 0.25;
+      // 照原版張得很開（快要跟光線垂直），從正面看得到四片扉的整個面
+      tilt.rotation.x = -1.05 - (k % 2) * 0.15;
       hinge.add(tilt);
       // 上下兩片寬、左右兩片窄（梯形的樣子用兩塊疊）
       const wide = k % 2 === 0;
@@ -4170,8 +4354,8 @@ const WK = (() => {
     const lampBody = std(0xffffff, { map: tex('#4a403c'), metalness: 0.45, roughness: 0.55, envMap: env.tex, envMapIntensity: 0.8 });
     const lampRing = std(0x3a302c, { metalness: 0.5, roughness: 0.6, envMap: env.tex, envMapIntensity: 0.5 });
     const dark = std(0xffffff, { map: tex('#151110'), metalness: 0.4, roughness: 0.6 });
-    // 遮光扉、吊架：比燈身再淺一點的舊鐵，暗背景前才看得出輪廓
-    const flapM = std(0xffffff, { map: tex('#6a5e58'), metalness: 0.3, roughness: 0.65, side: T.DoubleSide });
+    // 遮光扉、吊架：照原版是一片片平平的深灰鐵板（幾乎沒有明暗與髒污），暗背景前只看得到清楚的輪廓
+    const flapM = std(0x1e1a1a, { metalness: 0, roughness: 1, side: T.DoubleSide });
     const cableMat = std(0x080706, { roughness: 0.6 });
     const wood = std(0xc8b0a8, { map: woodTex(), roughness: 0.8 });
     const cabinet = std(0xffffff, { map: tex('#2c201a'), roughness: 0.8 });
@@ -4185,9 +4369,10 @@ const WK = (() => {
     // 房間的牆材質是 BackSide（從盒子裡面看），這兩面要正面
     const brick = WK.M.wall.clone(); brick.side = T.FrontSide;
     for (const sx of [-1, 1]) {
-      const wall = flat(new T.PlaneGeometry(5, CEIL - FLOOR), brick);
+      // 牆一路接到房間的天花板（2.55），木樑上面才不會露出一條縫
+      const wall = flat(new T.PlaneGeometry(5, 2.55 - FLOOR), brick);
       wall.rotation.y = -sx * PI / 2;
-      wall.position.set(sx * WALL, (CEIL + FLOOR) / 2, -0.4);
+      wall.position.set(sx * WALL, (2.55 + FLOOR) / 2, -0.4);
       wall.receiveShadow = true;
       scene.add(wall);
       // 牆邊的木柱
@@ -4206,18 +4391,19 @@ const WK = (() => {
     for (let i = 0; i < 9; i++) scene.add(add(flat(new T.CylinderGeometry(0.008, 0.008, 0.17, 6), dark), -1.1 + i * 0.275, TY + 0.085, TZ));
     for (const x of [-1.2, 1.2]) scene.add(add(flat(new T.CylinderGeometry(0.02, 0.02, CEIL - 0.36 - TY, 8), dark), x, (TY + CEIL - 0.36) / 2, TZ));
 
-    // ---------- 兩盞舞台聚光燈：從燈架吊下來，在莊家的臉兩側，燈頭往下斜對著桌面 ----------
+    // ---------- 兩盞舞台聚光燈：從燈架吊下來，在莊家的臉兩側；照原版燈頭朝向玩家這端（從座位看得到鏡片與張開的遮光扉） ----------
     // 鏡片：暗紅褐的厚玻璃，裡面一點反光（燈往下照，從座位看不到亮面）；scene.js 每格跟著燈的明暗調
     const lensMat = new T.MeshBasicMaterial({ color: 0x5a3426 });
     WK.stageLens = lensMat;
     WK.stageLights = [];
     for (const sx of [-1, 1]) {
-      const at = V(sx * 0.8, 0.8, -0.72);
-      const sl = stageLight(at, V(-sx * 0.05, -0.45, 0.45), lensMat, { body: lampBody, dark: flapM, ring: lampRing });
-      sl.scale.setScalar(1.15);
+      // 照原版的大小與位置：從座位看燈在莊家的臉兩側、各離中線約畫面寬的 1/6，整盞（含遮光扉）約畫面寬的 1/7
+      const at = V(sx * 0.52, 0.84, -0.72);
+      const sl = stageLight(at, V(sx * 0.2, -0.3, 1.15), lensMat, { body: lampBody, dark: flapM, ring: lampRing }, sx * 0.45);
+      sl.scale.setScalar(0.75);
       scene.add(sl);
       // 吊桿：燈架到吊架
-      scene.add(add(flat(new T.CylinderGeometry(0.014, 0.014, TY - at.y - 0.2, 8), dark), at.x, (TY + at.y + 0.28) / 2, TZ));
+      scene.add(add(flat(new T.CylinderGeometry(0.012, 0.012, TY - at.y - 0.15, 8), dark), at.x, (TY + at.y + 0.15) / 2, TZ));
       // 燈的電線：從燈後面往上繞到燈架、再往外垂到牆邊
       scene.add(cable(at.clone().add(V(0, 0.08, -0.25)), V(sx * 0.55, TY, TZ), 0.25, 0.011, cableMat));
       scene.add(cable(V(sx * 1.0, TY + 0.17, TZ), V(sx * WALL, 1.6, TZ + 0.5), 0.35, 0.013, cableMat));
@@ -4283,6 +4469,8 @@ const WK = (() => {
     const ch = chair(wood);
     ch.position.set(1.3, FLOOR, -0.3); ch.rotation.y = -PI / 2 + 0.5;
     scene.add(ch);
+    // 對手坐的椅子（room.js 的 buildTable 放；不合併，雙人時要跟著人動）
+    WK.buildChair = () => chair(wood);
 
     // 牆與器材的微弱暖紅光（磚牆要看得到、但比桌面暗很多）；跟吊燈一起變暗、閃爍（scene.js 每格乘上 lampDim）
     WK.propLights = [];
@@ -4302,13 +4490,281 @@ const WK = (() => {
 
 </script>
 <script>
+// 開場（照原版）：先從一條很暗的工業走廊走進來（鐵格柵地板、水泥牆、管線、欄杆、幾盞罩著鐵籠的燈泡、盡頭一扇門），
+// 走到門口畫面黑掉、切進房間坐下；桌上放著一張「GENERAL RELEASE OF LIABILITY」生死狀，旁邊一台輸入名字的按鍵台。
+// 走廊放在離房間很遠的地方（x = INTRO_X），霧會把兩邊隔開；走廊全部用不吃燈光的材質（明暗直接畫在貼圖上），
+// 不用多加燈：場景裡每多一盞燈，所有材質每個像素都要多算一次。
+// buildIntro() 在 scene.js 的 init 呼叫，回傳 { corridor, waiver, path, setName, flashKey, show }
+(() => {
+  const { T, V, PI, scene, canvasTex, blot, R, tex } = WK;
+  const INTRO_X = 40;
+  const FLOOR = -0.85;
+  const basic = (map, o = {}) => new T.MeshBasicMaterial(Object.assign({ map, color: 0xffffff }, o));
+  const add = (o, x, y, z) => { o.position.set(x, y, z); return o; };
+
+  // ---------- 走廊的貼圖（明暗直接畫進去） ----------
+  // 牆：照原版錄影是剝落的暗紅磚牆（被燈照到的地方偏紅、上面比較暗），一條條水痕與霉斑
+  function concreteTex() {
+    return canvasTex(256, 512, (g, w, h) => {
+      const gr = g.createLinearGradient(0, 0, 0, h);
+      gr.addColorStop(0, '#120c0a'); gr.addColorStop(0.45, '#4a2a22'); gr.addColorStop(0.8, '#3a221c'); gr.addColorStop(1, '#1c1210');
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      // 磚：一塊塊深淺不同，有的剝落露出灰色的灰泥
+      const bw = 64, bh = 22;
+      for (let r = 0; r * bh < h; r++) for (let c = -1; c * bw < w; c++) {
+        const x = c * bw + (r % 2 ? bw / 2 : 0), y = r * bh;
+        const k = R(0, 1);
+        g.fillStyle = k < 0.15 ? 'rgba(120,110,100,.25)' : `rgba(${R(90, 140) | 0},${R(30, 50) | 0},${R(24, 40) | 0},${R(0.12, 0.3)})`;
+        g.fillRect(x + 2, y + 2, bw - 4, bh - 4);
+      }
+      for (let i = 0; i < 90; i++) blot(g, R(0, w), R(0, h), R(6, 40), ['rgba(0,0,0,.25)', 'rgba(90,60,45,.12)', 'rgba(60,30,24,.2)'][i % 3]);
+      for (let i = 0; i < 24; i++) {
+        const x = R(0, w), y = R(0, h * 0.5), len = R(60, 300);
+        const s = g.createLinearGradient(0, y, 0, y + len);
+        s.addColorStop(0, 'rgba(0,0,0,.45)'); s.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = s; g.fillRect(x, y, R(2, 8), len);
+      }
+      // 一格格的水泥板接縫
+      g.fillStyle = 'rgba(0,0,0,.5)';
+      for (let y = 0; y < h; y += 128) g.fillRect(0, y, w, 2);
+      g.fillRect(0, 0, 2, h);
+    }, [3, 1]);
+  }
+  // 鐵格柵地板：暗鐵、格子縫透出底下的黑
+  function gratingTex() {
+    return canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+      const n = 8, c = w / n;
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        const v = 46 + R(0, 22) | 0;
+        g.fillStyle = `rgb(${v + 6},${v},${v - 4})`;
+        g.fillRect(i * c + 3, j * c + 3, c - 6, c - 6);
+      }
+      g.strokeStyle = 'rgba(70,58,50,.8)'; g.lineWidth = 2;
+      for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(i * c, 0); g.lineTo(i * c, h); g.stroke(); }
+      for (let i = 0; i < 30; i++) blot(g, R(0, w), R(0, h), R(5, 26), 'rgba(80,36,20,.35)');
+    }, [2, 7]);
+  }
+  // 圓管：橫向的亮帶（上面受光），鏽斑
+  function pipeTex(base) {
+    return canvasTex(64, 256, (g, w, h) => {
+      const gr = g.createLinearGradient(0, 0, w, 0);
+      gr.addColorStop(0, '#050404'); gr.addColorStop(0.35, base); gr.addColorStop(0.5, '#6a5a50'); gr.addColorStop(0.65, base); gr.addColorStop(1, '#050404');
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 16; i++) blot(g, R(0, w), R(0, h), R(3, 12), 'rgba(110,48,22,.45)');
+    });
+  }
+  // 地上、牆上的光暈（加法混色的平面，假裝燈泡照出來的一圈光）
+  const pool = canvasTex(128, 128, (g, w, h) => {
+    const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    gr.addColorStop(0, 'rgba(255,190,150,.8)'); gr.addColorStop(0.4, 'rgba(180,90,60,.35)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  }, null, false);
+  pool.magFilter = T.LinearFilter; pool.minFilter = T.LinearFilter;
+
+  function buildCorridor() {
+    const g = new T.Group();
+    g.position.set(INTRO_X, 0, 0);
+    const L = 9, W = 2.2, H = 3.0, Z0 = -0.6;     // 走廊從 z = Z0（門）往 +z 延伸 L 公尺
+    const zc = Z0 + L / 2;
+    const wallM = basic(concreteTex());
+    for (const sx of [-1, 1]) {
+      const wall = new T.Mesh(new T.PlaneGeometry(L, H), wallM);
+      wall.rotation.y = -sx * PI / 2;
+      add(wall, sx * W / 2, FLOOR + H / 2, zc);
+      g.add(wall);
+    }
+    const floor = new T.Mesh(new T.PlaneGeometry(W, L), basic(gratingTex()));
+    floor.rotation.x = -PI / 2; add(floor, 0, FLOOR, zc); g.add(floor);
+    const ceil = new T.Mesh(new T.PlaneGeometry(W, L), basic(null, { color: 0x050404 }));
+    ceil.rotation.x = PI / 2; add(ceil, 0, FLOOR + H, zc); g.add(ceil);
+    // 天花板的鐵樑
+    const beamM = basic(pipeTex('#2a221e'));
+    for (let z = Z0 + 0.8; z < Z0 + L; z += 1.4) g.add(add(new T.Mesh(new T.BoxGeometry(W, 0.12, 0.1), beamM), 0, FLOOR + H - 0.08, z));
+    // 牆上一排排的管線（右牆三根、左牆兩根）
+    const pipeM = basic(pipeTex('#3a2c24')), pipeM2 = basic(pipeTex('#4a2018'));
+    for (const [sx, y, r, m] of [[1, 1.35, 0.05, pipeM], [1, 1.55, 0.035, pipeM2], [1, 1.7, 0.06, pipeM], [-1, 1.9, 0.045, pipeM], [-1, 2.05, 0.03, pipeM2]]) {
+      const p = new T.Mesh(new T.CylinderGeometry(r, r, L, 10), m);
+      p.rotation.x = PI / 2; add(p, sx * (W / 2 - r - 0.04), FLOOR + y, zc); g.add(p);
+      // 固定管子的夾具
+      for (let z = Z0 + 0.5; z < Z0 + L; z += 1.6) g.add(add(new T.Mesh(new T.BoxGeometry(0.03, r * 2.6, 0.04), beamM), sx * (W / 2 - 0.02), FLOOR + y, z));
+    }
+    // 左邊的鐵欄杆
+    const railM = basic(pipeTex('#5a4a40'));
+    const rail = new T.Mesh(new T.CylinderGeometry(0.022, 0.022, L - 0.6, 8), railM);
+    rail.rotation.x = PI / 2; add(rail, -W / 2 + 0.22, FLOOR + 1.0, zc + 0.3); g.add(rail);
+    const rail2 = rail.clone(); rail2.position.y = FLOOR + 0.55; g.add(rail2);
+    for (let z = Z0 + 0.6; z < Z0 + L; z += 1.2) g.add(add(new T.Mesh(new T.CylinderGeometry(0.018, 0.018, 1.0, 6), railM), -W / 2 + 0.22, FLOOR + 0.5, z));
+    // 罩著鐵籠的燈泡：亮的燈泡＋光暈，地上、牆上各一圈假的光
+    const bulbM = new T.MeshBasicMaterial({ color: 0xffd9a8 });
+    const cageM = basic(null, { color: 0x1a1512, wireframe: true });
+    for (const z of [Z0 + 1.6, Z0 + 4.4, Z0 + 7.2]) {
+      const by = FLOOR + H - 0.35;
+      g.add(add(new T.Mesh(new T.SphereGeometry(0.035, 10, 8), bulbM), 0, by, z));
+      g.add(add(new T.Mesh(new T.CylinderGeometry(0.07, 0.07, 0.14, 8, 2, true), cageM), 0, by, z));
+      const halo = new T.Sprite(new T.SpriteMaterial({ map: tex.glow, color: 0xffb070, blending: T.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.6 }));
+      halo.scale.set(0.5, 0.5, 1); add(halo, 0, by, z); g.add(halo);
+      const pm = new T.MeshBasicMaterial({ map: pool, transparent: true, blending: T.AdditiveBlending, depthWrite: false });
+      const fp = new T.Mesh(new T.PlaneGeometry(2.4, 2.4), pm);
+      fp.rotation.x = -PI / 2; add(fp, 0, FLOOR + 0.01, z); g.add(fp);
+      for (const sx of [-1, 1]) {
+        const wp = new T.Mesh(new T.PlaneGeometry(2.2, 2.2), pm);
+        wp.rotation.y = -sx * PI / 2; add(wp, sx * (W / 2 - 0.01), by - 0.6, z); g.add(wp);
+      }
+    }
+    // 盡頭的門：門框、門縫透出一點暗紅的光（房間在門的另一邊）
+    const frameM = basic(pipeTex('#2a221e'));
+    for (const sx of [-1, 1]) g.add(add(new T.Mesh(new T.BoxGeometry(0.1, 2.2, 0.12), frameM), sx * 0.55, FLOOR + 1.1, Z0));
+    g.add(add(new T.Mesh(new T.BoxGeometry(1.2, 0.12, 0.12), frameM), 0, FLOOR + 2.2, Z0));
+    const glowDoor = canvasTex(64, 128, (c, w, h) => {
+      const gr = c.createLinearGradient(0, 0, 0, h);
+      gr.addColorStop(0, '#2a120c'); gr.addColorStop(0.7, '#7a3424'); gr.addColorStop(1, '#a04a30');
+      c.fillStyle = gr; c.fillRect(0, 0, w, h);
+    });
+    g.add(add(new T.Mesh(new T.PlaneGeometry(1.0, 2.1), basic(glowDoor)), 0, FLOOR + 1.05, Z0 - 0.02));
+    // 門外的牆（門以外的地方是黑的）
+    g.add(add(new T.Mesh(new T.PlaneGeometry(W, H), basic(null, { color: 0x030202 })), 0, FLOOR + H / 2, Z0 - 0.04));
+    g.visible = false;
+    scene.add(g);
+    // 鏡頭走的路線（世界座標）：從走廊後面走到門口
+    const eye = FLOOR + 1.58;
+    return { group: g, from: V(INTRO_X, eye, Z0 + L - 0.6), to: V(INTRO_X, eye, Z0 + 0.9), look: V(INTRO_X, eye - 0.08, Z0 - 1) };
+  }
+
+  // ---------- 桌上的生死狀與按鍵台 ----------
+  const CLAUSES = [
+    '1. 本人自願參與本遊戲，並了解遊戲中使用的霰彈槍裝有實彈。',
+    '2. 遊戲中發生的任何受傷、昏迷或死亡，均與主辦方及莊家無關。',
+    '3. 除顫器僅於第一、二局提供。第三局起，不保證任何急救措施。',
+    '4. 勝利者可帶走公事包內的全部現金。',
+  ];
+  const PFONT = (px, w = '') => `${w} ${px}px "Courier New", "Noto Serif TC", "PMingLiU", serif`;
+  const KFONT = px => `${px}px Cubic11, "Microsoft JhengHei", monospace`;
+  // 自動換行（中文逐字、英文逐字也可以）
+  function wrap(g, text, x, y, maxW, lh) {
+    let line = '';
+    for (const ch of text) {
+      if (g.measureText(line + ch).width > maxW && line) { g.fillText(line, x, y); y += lh; line = ch.trim() ? ch : ''; }
+      else line += ch;
+    }
+    if (line) g.fillText(line, x, y);
+    return y + lh;
+  }
+  function paperDraw(g, w, h, name) {
+    // 泛黃的紙、四角比較暗、幾塊污漬、摺痕
+    g.fillStyle = '#cfc5ab'; g.fillRect(0, 0, w, h);
+    const v = g.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, h * 0.75);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(70,50,30,.45)');
+    g.fillStyle = v; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 10; i++) blot(g, R(0, w), R(0, h), R(14, 60), 'rgba(120,80,40,.12)');
+    g.fillStyle = 'rgba(80,60,40,.18)'; g.fillRect(0, h * 0.5, w, 2);
+    g.fillStyle = '#1e1a14'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    g.font = PFONT(54, 'bold'); g.fillText('GENERAL RELEASE', w / 2, 92);
+    g.fillText('OF LIABILITY', w / 2, 148);
+    g.font = PFONT(26); g.fillText('一般責任免除聲明書', w / 2, 192);
+    g.fillRect(48, 212, w - 96, 3);
+    g.textAlign = 'left'; g.font = PFONT(22);
+    let y = 256;
+    for (const c of CLAUSES) y = wrap(g, c, 56, y, w - 112, 32) + 10;
+    // 一堆看不清楚的小字（條款細則）
+    g.fillStyle = 'rgba(30,26,20,.55)';
+    for (let r = 0; r < 9; r++) for (let x = 56; x < w - 56; x += R(30, 70)) g.fillRect(x, y + r * 22, R(18, 52), 8);
+    y += 9 * 22 + 30;
+    // 簽名欄
+    g.fillStyle = '#1e1a14'; g.font = PFONT(22);
+    g.fillText('SIGNATURE / 簽名', 56, h - 120);
+    g.fillRect(56, h - 60, w - 112, 3);
+    if (name) {
+      g.font = PFONT(64, 'bold'); g.fillStyle = '#2a1410';
+      g.fillText(name, 76, h - 72);
+    }
+  }
+  const KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(['DEL', 'ENTER']);
+  function keypadDraw(g, w, h, name, lit) {
+    // 舊鐵殼、上面一塊綠色 LCD 顯示名字、下面 6 欄的鍵
+    g.fillStyle = '#2a2420'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 40; i++) blot(g, R(0, w), R(0, h), R(6, 30), ['rgba(110,50,26,.35)', 'rgba(0,0,0,.3)'][i % 2]);
+    g.fillStyle = '#000'; g.fillRect(22, 22, w - 44, 92);
+    g.fillStyle = '#b4ffa4'; g.font = KFONT(56); g.textAlign = 'left'; g.textBaseline = 'middle';
+    g.fillText((name || '') + (name && name.length >= 6 ? '' : '_'), 40, 70);
+    const cols = 6, kw = (w - 44 - (cols - 1) * 8) / cols, kh = 64, top = 136;
+    KEYS.forEach((k, i) => {
+      const wide = k === 'ENTER' ? 2 : 1;
+      const idx = i < 26 ? i : i === 26 ? 26 : 27;
+      const col = idx % cols, row = Math.floor(idx / cols);
+      const x = 22 + col * (kw + 8), y = top + row * (kh + 8), ww = kw * wide + 8 * (wide - 1);
+      const on = lit === k;
+      g.fillStyle = on ? '#d8c8a8' : '#14110f'; g.fillRect(x, y + 4, ww, kh);
+      g.fillStyle = on ? '#f4ead0' : '#5a4e44'; g.fillRect(x, y, ww, kh - 4);
+      g.fillStyle = on ? '#1a1410' : '#d8ccb4'; g.font = KFONT(k.length > 1 ? 22 : 30); g.textAlign = 'center';
+      g.fillText(k, x + ww / 2, y + kh / 2 - 2);
+    });
+  }
+
+  function buildWaiver() {
+    const g = new T.Group();
+    // 紙：平放在玩家這端，略斜
+    const pc = document.createElement('canvas'); pc.width = 600; pc.height = 820;
+    const pg = pc.getContext('2d');
+    const paperTex = new T.CanvasTexture(pc); paperTex.encoding = T.sRGBEncoding; paperTex.anisotropy = 8;
+    const paper = new T.Mesh(new T.PlaneGeometry(0.33, 0.45), new T.MeshStandardMaterial({ map: paperTex, roughness: 0.95 }));
+    paper.rotation.x = -PI / 2; paper.rotation.z = 0.06;
+    paper.position.set(-0.08, 0.003, 0.62);
+    paper.receiveShadow = true;
+    g.add(paper);
+    // 按鍵台（照原版）：立在紙旁邊的鐵盒，正面朝玩家、往後仰一點
+    const kc = document.createElement('canvas'); kc.width = 512; kc.height = 512;
+    const kg = kc.getContext('2d');
+    const keyTex = new T.CanvasTexture(kc); keyTex.encoding = T.sRGBEncoding; keyTex.anisotropy = 8;
+    const shell = new T.Mesh(new T.BoxGeometry(0.17, 0.19, 0.07), new T.MeshStandardMaterial({ color: 0x2a221e, roughness: 0.7, metalness: 0.4 }));
+    shell.position.set(0.0, 0.095, 0.0); shell.castShadow = true;
+    const face = new T.Mesh(new T.PlaneGeometry(0.16, 0.18), new T.MeshStandardMaterial({ map: keyTex, roughness: 0.6, emissive: 0xffffff, emissiveMap: keyTex, emissiveIntensity: 0.35 }));
+    face.position.set(0, 0.095, 0.036);
+    const pad = new T.Group();
+    pad.add(shell, face);
+    pad.position.set(0.2, 0, 0.56);
+    pad.rotation.set(-0.28, -0.35, 0);
+    g.add(pad);
+    g.visible = false;
+    scene.add(g);
+    let name = '', lit = null, litTimer = 0;
+    const redraw = () => {
+      paperDraw(pg, pc.width, pc.height, name); paperTex.needsUpdate = true;
+      keypadDraw(kg, kc.width, kc.height, name, lit); keyTex.needsUpdate = true;
+    };
+    redraw();
+    if (document.fonts && document.fonts.load) document.fonts.load('24px Cubic11').then(redraw, () => {});
+    return {
+      group: g,
+      setName(n) { if (n !== name) { name = n; redraw(); } },
+      flashKey(k) {
+        lit = k; redraw();
+        clearTimeout(litTimer);
+        litTimer = setTimeout(() => { lit = null; redraw(); }, 140);
+      },
+      // 給簽名後收走的動畫用
+      paper, keypad: [shell, face],
+    };
+  }
+
+  function buildIntro() {
+    const corridor = buildCorridor();
+    const waiver = buildWaiver();
+    return { corridor, waiver };
+  }
+
+  Object.assign(WK, { buildIntro, INTRO_X });
+})();
+
+</script>
+<script>
 // 房間、燈光、後牆的電閘、桌子、桌上的除顫器、椅背（舞台燈、音響等道具在 props.js）
 // buildRoom() / buildTable() 回傳之後還要操作的燈光與物件
 (() => {
   const { T, V, PI, scene, env, std, mesh, tex, M } = WK;
 
   // ---------- 房間、燈光、桌子 ----------
-  let spot, lampBulb, lightCone, flashLight, redLight, defibScreen, defibBox;
+  let spot, lampBulb, lightCone, flashLight, redLight;
   function buildRoom() {
     const room = new T.Mesh(new T.BoxGeometry(7, 3.4, 7), [M.wall, M.wall, M.ceil, M.floor, M.wall, M.wall]);
     room.material.forEach(m => { m.side = T.BackSide; });
@@ -4360,11 +4816,14 @@ const WK = (() => {
     scene.add(spot, spot.target);
 
     // 環境光與補光壓低：主光從上面來，桌子以外的地方很快變暗
-    scene.add(new T.HemisphereLight(0x6a5a50, 0x050303, 0.05));
+    const hemi = new T.HemisphereLight(0x6a5a50, 0x050303, 0.05);
+    hemi.userData.base = hemi.intensity; WK.hemi = hemi;
+    scene.add(hemi);
     // （原本玩家身後的補光與莊家背後的紅色輪廓光拿掉：主光從上面來，莊家的身體融進黑暗）
-    // 莊家的臉與手：從上前方打下來的窄光，在黑色背景前浮出來
-    const face = new T.SpotLight(0xffe8d8, 1.4, 3, 0.32, 0.6, 1.2);
-    face.position.set(0, 1.35, -0.25); face.target.position.set(0, 0.7, -1.15);
+    // 莊家的臉與手：從上前方打下來的窄光，在黑色背景前浮出來（原版的臉是灰暗的面具，不要打得太亮）
+    const face = new T.SpotLight(0xffe8d8, 0.65, 3, 0.32, 0.6, 1.2);
+    face.position.set(0, 1.35, -0.25); face.target.position.set(0, 0.42, -1.15);
+    face.userData.base = face.intensity; WK.faceLight = face;
     scene.add(face, face.target);
 
     flashLight = new T.PointLight(0xffb060, 0, 4, 2);
@@ -4384,7 +4843,7 @@ const WK = (() => {
     const box = mesh(new T.BoxGeometry(0.44, 0.58, 0.14), paint);
     box.position.z = 0.07; g.add(box);
     const face = new T.Mesh(new T.PlaneGeometry(0.4, 0.54), std(0xffffff, { map: tex.breaker, roughness: 0.75 }));
-    face.position.z = 0.1405; g.add(face);
+    face.position.z = 0.142; g.add(face);
     // 門片的鉸鍊與螺絲
     for (const y of [-0.2, 0.2]) {
       const h = mesh(new T.CylinderGeometry(0.008, 0.008, 0.06, 8), M.metalDark);
@@ -4443,7 +4902,8 @@ const WK = (() => {
   // 桌框的橫切面（寬 0.08、凸出桌面 3.5 公分、上緣兩邊倒角），沿 z 擠出 len 公尺
   function rimGeometry(len) {
     const s = new T.Shape();
-    s.moveTo(-0.04, -0.07); s.lineTo(0.04, -0.07); s.lineTo(0.04, 0.02); s.lineTo(0.026, 0.035); s.lineTo(-0.026, 0.035); s.lineTo(-0.04, 0.02); s.closePath();
+    // 照原版錄影：比較寬、比較高的桌框；內側（-x）先直直往上、上緣倒角，外側斜斜地收下去
+    s.moveTo(-0.06, -0.07); s.lineTo(0.06, -0.07); s.lineTo(0.06, 0.018); s.lineTo(0.032, 0.05); s.lineTo(-0.044, 0.05); s.lineTo(-0.06, 0.034); s.closePath();
     const geo = new T.ExtrudeGeometry(s, { depth: len, bevelEnabled: false });
     geo.translate(0, 0, -len / 2);
     // 木紋沿著長邊：側面的 uv 換成 (z, 高度)
@@ -4458,8 +4918,9 @@ const WK = (() => {
     const TB = WK.TABLE, W = TB.x * 2, L = TB.z1 - TB.z0, zc = (TB.z0 + TB.z1) / 2;
     const top = mesh(new T.BoxGeometry(W, 0.05, L), M.table);
     top.position.set(0, -0.025, zc); scene.add(top);
-    for (const sx of [-1, 1]) { const r = mesh(rimGeometry(L + 0.16), M.rim); r.position.set(sx * (TB.x + 0.04), 0, zc); scene.add(r); }
-    for (const z of [TB.z0 - 0.04, TB.z1 + 0.04]) { const r = mesh(rimGeometry(W), M.rim); r.rotation.y = PI / 2; r.position.set(0, 0, z); scene.add(r); }
+    // 桌框的剖面內側在 -x：左邊與玩家那端的要鏡像，內側才朝著桌面
+    for (const sx of [-1, 1]) { const r = mesh(rimGeometry(L + 0.24), M.rim); r.position.set(sx * (TB.x + 0.06), 0, zc); r.scale.x = sx; scene.add(r); }
+    for (const sz of [-1, 1]) { const r = mesh(rimGeometry(W), M.rim); r.rotation.y = PI / 2; r.scale.x = -sz; r.position.set(0, 0, sz < 0 ? TB.z0 - 0.06 : TB.z1 + 0.06); scene.add(r); }
     // 桌裙與桌腳
     const skirt = mesh(new T.BoxGeometry(W + 0.12, 0.1, L + 0.12), M.dark);
     skirt.position.set(0, -0.12, zc); scene.add(skirt);
@@ -4470,17 +4931,24 @@ const WK = (() => {
     // 道具格的白線畫在桌面貼圖上（materials.js 的 tex.table）
     // 桌上的除顫器（defib.js）：照原版放在右側桌緣、靠玩家這端，長邊跟右側桌框平行、緊貼桌框，
     // 螢幕朝左對著桌子中央（機器本身不轉向玩家；看起來斜斜的是因為鏡頭從高處斜看），後面的管子與電線伸出桌外
-    const { group: defib, screen } = WK.buildDefib();
-    defibScreen = screen;
-    defib.scale.setScalar(1.15);
-    defib.rotation.y = -PI / 2;
-    defib.position.set(TB.x - 0.1 * 1.15 - 0.025, 0, -0.06);
-    scene.add(defib);
-    defibBox = defib;
-    // 椅背
-    const chair = mesh(new T.BoxGeometry(0.62, 1.1, 0.06), std(0x060404, { roughness: 0.9 }));
-    chair.position.set(0, 0.25, -1.45); scene.add(chair);
-    return { defibScreen, defibBox };
+    // 雙人時對手那邊也有一台：鏡像放在左側桌緣、靠對手那端，螢幕朝右對著桌子中央（單人時藏起來）
+    // 照原版錄影的大小：從座位看約畫面寬的 1/8（以前 1.15 倍大了一倍、搶畫面），中心在中線靠玩家這邊一點
+    const DS = 0.65;
+    const defibs = [1, -1].map(sx => {
+      const d = WK.buildDefib();
+      d.group.scale.setScalar(DS);
+      d.group.rotation.y = -sx * PI / 2;
+      d.group.position.set(sx * (TB.x - 0.1 * DS - 0.025), 0, sx * 0.05);
+      scene.add(d.group);
+      return d;
+    });
+    defibs[1].group.visible = false;
+    // 對手的椅子：照原版看得到的木椅（坐的人擋住大半，過曝時才看得清楚）；椅背在莊家身後，頭往後仰也碰不到
+    const chair = WK.buildChair();
+    chair.scale.setScalar(1.2);
+    chair.position.set(0, -0.85, -1.32);
+    scene.add(chair);
+    return { defibs, chair };
   }
 
   function slotPos(side, i) {
@@ -4507,7 +4975,7 @@ const WK = (() => {
   //       ear 耳朵（s 大小、out 往外張的角度、lobe 耳垂）、neck 脖子（adam 喉結、tendon 頸部肌腱）
   // eyes：眼白的顏色（dark 原作的黑眼睛、blood 充血、yellow 泛黃、milky 白濁）；glow：瞳孔的光
   // paint：base 膚底色、lip 嘴唇、blood 嘴角流血、tears 黑色淚痕、liner 眼線、wrinkle 皺紋強度、stubble 鬍渣
-  // body：w 寬、d 厚、belly 肚子、chest 胸、shoulder 肩寬、arm 手臂粗細；outfit：服裝（body.js 的 OUTFITS：suit、mourning、shawl）
+  // body：w 寬、d 厚、belly 肚子、chest 胸、shoulder 肩寬、arm 手臂粗細；armK：手臂長度倍率（搆得到桌子中間）；outfit：服裝（body.js 的 OUTFITS：suit、mourning、shawl）
   // persona：個性（scene.js 讀）——face 平常的表情（加在其他表情上）、bend 上半身往前彎（負的往後挺）、chin 下巴抬起、
   //          rest 休息時兩手放哪（莊家的座標，沒給就用預設）、elbows 手肘壓在桌上（手臂反向運動學的手肘方向 [x, y, z]）、fidget 待機小動作（tap 敲桌、veil 拉面紗、sway 晃頭）、
   //          tell 用放大鏡看到子彈時藏不住的表情：live／blank = [秒, smile, jaw, squint, brow]，blankP 看到空包也這樣（假的）的機率
@@ -4515,7 +4983,8 @@ const WK = (() => {
   const CHARS = {
     dealer: {
       // 原版的莊家：蒼白像面具的大臉（scene.js 把頭放大 headScale 倍）、黑色深陷的眼窩（不發光）、咧開露出整排牙齒的大嘴
-      tint: 0xffffff, rough: 0.5, hair: 'none', eyes: 'dark', glow: 0x000000, eyeGlow: 0, headScale: 1.5, outfit: 'suit',
+      // 照原版錄影的畫面比例：從座位看臉約佔畫面寬 1/9、偏圓（橫向放得比直向多），頭往下放 headDrop，臉的下緣貼著桌子遠端
+      tint: 0xffffff, rough: 0.5, hair: 'none', eyes: 'dark', glow: 0x000000, eyeGlow: 0, headScale: [2.25, 1.45, 1.85], headDrop: 0.36, armK: 1.4, outfit: 'suit',
       head: {
         face: { hollow: 0.9, temple: 0.8, cheek: 1.1, jawW: 0.077 },
         eye: { deep: 1.1 },
@@ -4526,11 +4995,12 @@ const WK = (() => {
       },
       paint: { base: [196, 186, 166], lip: [110, 45, 40], blood: true, tears: false, wrinkle: 1, stubble: 0, sockets: 0.95 },
       teeth: { missing: [-4, 2, 5], color: 0xd8cca2 },
-      body: { w: 1, d: 1, belly: 0, chest: 0, shoulder: 1, arm: 1 },
-      persona: { face: { smile: 0.15 }, bend: 0, chin: 0, fidget: 'tap', tell: { live: [1.4, 0.5, 0.02, 0.35, 0] } },
+      body: { w: 1.15, d: 1, belly: 0, chest: 0, shoulder: 1.15, arm: 1 },
+      // 兩手休息時分得比較開、搭在桌子遠端的桌框上（原版的手在臉的下方兩側；敲桌的小動作才敲得到東西）
+      persona: { face: { smile: 0.15 }, bend: 0, chin: 0, fidget: 'tap', rest: [[-0.38, 0.075, 0.3], [0.38, 0.075, 0.3]], tell: { live: [1.4, 0.5, 0.02, 0.35, 0] } },
     },
     widow: {
-      tint: 0xe4eaf4, rough: 0.42, hair: 'long', hairColor: 0x5a3028, eyes: 'blood', glow: 0xfff0e0, outfit: 'mourning',
+      tint: 0xe4eaf4, rough: 0.42, hair: 'long', hairColor: 0x5a3028, eyes: 'blood', glow: 0xfff0e0, armK: 1.15, outfit: 'mourning',
       head: {
         skull: { w: 0.13, h: 0.18, d: 0.158 },
         face: { w: 0.92, cheek: 1.15, hollow: 0.5, temple: 0.4, jawW: 0.077, chinW: 0.8, chinY: -0.004, chinZ: 0.13, chinR: 0.027 },
@@ -4547,7 +5017,7 @@ const WK = (() => {
       persona: { face: { smile: -0.35, brow: 0.25 }, bend: -0.07, chin: 0.07, fidget: 'veil', veil: true, tell: { live: [0.9, 0.55, 0, 0.1, 0] } },
     },
     crone: {
-      tint: 0xfff0cc, rough: 0.62, hair: 'bun', hairColor: 0xf2eee6, eyes: 'milky', glow: 0xf4fff0, outfit: 'shawl',
+      tint: 0xfff0cc, rough: 0.62, hair: 'bun', hairColor: 0xf2eee6, eyes: 'milky', glow: 0xf4fff0, armK: 1.15, outfit: 'shawl',
       head: {
         skull: { w: 0.132, h: 0.183, d: 0.162 },
         face: { w: 0.9, cheek: 1.25, hollow: 1.4, temple: 1.2, jawW: 0.08, chinW: 0.85, chinY: -0.022, chinZ: 0.152, chinR: 0.03, length: 1.03 },
@@ -5416,6 +5886,8 @@ normal = headPerturb(-vViewPosition, normal, dH * uBump * 4.0, faceDirection);`)
     const bones = rest.map(() => new T.Bone());
     // 脖子骨頭跟著上半身、在頭轉軸的位置；頭骨頭就是頭的轉軸本身（加一根不轉的子骨頭）
     bones[B.neck].position.copy(pivot.position);
+    // 頭放大（headScale）時脖子跟著放大，不然大下巴下面接一根細脖子（腎上腺素的針也才會扎在脖子上）
+    bones[B.neck].scale.copy(pivot.scale);
     upper.add(bones[B.neck]);
     pivot.add(bones[B.head]);
     for (let b = 2; b < NB; b++) {
@@ -5910,7 +6382,7 @@ normal = headPerturb(-vViewPosition, normal, dH * uBump * 4.0, faceDirection);`)
     const m = new T.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: o.rough ?? 0.9, metalness: 0, side: o.side || T.FrontSide });
     const tx = kinds.map(fabric);
     m.onBeforeCompile = sh => {
-      Object.assign(sh.uniforms, { tF0: { value: tx[0] }, tF1: { value: tx[1] }, tF2: { value: tx[2] }, uFs: { value: new T.Vector3(...scales) }, uFB: { value: o.bump ?? 0.6 }, uDirt: { value: o.dirt ?? 0.5 } });
+      Object.assign(sh.uniforms, { tF0: { value: tx[0] }, tF1: { value: tx[1] }, tF2: { value: tx[2] }, uFs: { value: new T.Vector3(...scales) }, uFB: { value: o.bump ?? 0.6 }, uDirt: { value: o.dirt ?? 0.5 }, uFade: { value: o.fade ?? 1 } });
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nattribute vec3 fab;\nvarying vec3 vFab;\nvarying vec3 vRest;\nvarying vec3 vRestN;')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFab = fab;\nvRest = position;\nvRestN = normal;');
@@ -5921,7 +6393,7 @@ varying vec3 vRest;
 varying vec3 vRestN;
 uniform sampler2D tF0, tF1, tF2;
 uniform vec3 uFs;
-uniform float uFB, uDirt;
+uniform float uFB, uDirt, uFade;
 vec4 tri(sampler2D t, float s, vec3 w) {
   return texture2D(t, vRest.zy * s) * w.x + texture2D(t, vRest.xz * s) * w.y + texture2D(t, vRest.xy * s) * w.z;
 }
@@ -5938,7 +6410,9 @@ tw /= tw.x + tw.y + tw.z;
 vec4 fs = tri(tF0, uFs.x, tw) * vFab.x + tri(tF1, uFs.y, tw) * vFab.y + tri(tF2, uFs.z, tw) * vFab.z;
 float fabH = fs.g;
 diffuseColor.rgb *= fs.r * 1.55;
-diffuseColor.rgb *= mix(vec3(1.0), vec3(0.78, 0.68, 0.52), fs.b * uDirt);`)
+diffuseColor.rgb *= mix(vec3(1.0), vec3(0.78, 0.68, 0.52), fs.b * uDirt);
+// 照原版：脖子以下融進黑暗，只剩臉和手浮在黑底前（綁定姿勢的高度：肩膀約 0.36、領口約 0.5、最高 0.56）
+diffuseColor.rgb *= mix(uFade, 1.0, smoothstep(0.5, 0.57, vRest.y));`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB * 0.004, faceDirection);`);
     };
@@ -5959,7 +6433,8 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
     const b = spec.body, hd = WK.Head.layout(spec);
     return {
       b, outfit: spec.outfit || 'suit',
-      W: 0.2 * b.w, Dp: 0.14 * b.d, sh: b.shoulder, arm: b.arm,
+      // 袖子在 scene.js 整個放大 armK 倍（手臂變長）：先除掉，粗細才不變
+      W: 0.2 * b.w, Dp: 0.14 * b.d, sh: b.shoulder, arm: b.arm / (spec.armK || 1),
       neckR: hd.neck.r, neckZ: hd.neck.z + 0.008,
     };
   }
@@ -6198,7 +6673,7 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
     geo.setAttribute('fab', new T.BufferAttribute(fab, 3));
     geo.setIndex(n > 65535 ? new T.Uint32BufferAttribute(idx, 1) : new T.Uint16BufferAttribute(idx, 1));
     geo.computeBoundingSphere();
-    const mat = fabricMaterial(O.fab, O.scale, { rough: L.outfit === 'mourning' ? 0.75 : 0.92, dirt: 0.5, bump: L.outfit === 'mourning' ? 0.3 : 0.6 });
+    const mat = fabricMaterial(O.fab, O.scale, { rough: L.outfit === 'mourning' ? 0.75 : 0.92, dirt: 0.5, bump: L.outfit === 'mourning' ? 0.3 : 0.6, fade: 0.05 });
     const sleeve = sleeveGeometry(L, S);
     return { spec, L, S, geo, mat, sleeve, stats: { verts: n, tris: idx.length / 3, sleeveTris: sleeve.index.count / 3, ms: Math.round(performance.now() - t0) } };
   }
@@ -6232,8 +6707,9 @@ normal = fabPerturb(-vViewPosition, normal, vec2(dFdx(fabH), dFdy(fabH)) * uFB *
     return {
       built, torso, sleeves,
       // 第 i 隻手臂：肩膀 S、手肘 E、手腕 W（莊家的座標）
-      arm(i, S, E, W) {
+      arm(i, S, E, W, k = 1) {
         const s = sleeves[i];
+        s.root.scale.setScalar(k);
         yA.copy(E).sub(S).normalize();
         fA.copy(W).sub(E).normalize();
         xA.crossVectors(yA, fA);
@@ -6702,7 +7178,7 @@ const World = (() => {
   } = WK;
 
   let renderer, canvas, envTex;
-  let spot, lampBulb, lightCone, flashLight, redLight, defibScreen, defibBox;
+  let spot, lampBulb, lightCone, flashLight, redLight, defibScreen, defibBox, defibs, oppChair;
   let time = 0, shake = 0, orbit = false, interactive = false;
   let stealable = new Set();
   const raycaster = new T.Raycaster();
@@ -6730,6 +7206,16 @@ const World = (() => {
   function setCharacter(id) {
     charId = CHARS[id] ? id : 'dealer';
     const spec = CHARS[charId], b = spec.body, my = ++headToken;
+    // 頭往下放（headDrop）時身體跟著一起往下放，肩膀才會在下巴下面（不然耳朵、下顎插進肩膀）；身體大半藏到桌面以下
+    // 只放六成：再低肩膀會在桌框下面，手往前伸時手臂會穿過桌框與桌面
+    D.bodyDrop = (spec.headDrop || 0) * 0.6;
+    D.armK = spec.armK || 1;
+    // 頭的大小與高度先放好再接頭（head.js 接頭時照當下的位置擺脖子，順序反了脖子會留在舊的高度）
+    // 原版的莊家是一張很大的面具臉：頭（連眼睛、牙齒、錨點）整個放大（可以給 [x, y, z] 把臉放圓），手和身體不變；
+    // headDrop 把頭往下放（原版的臉下緣緊貼桌子遠端，身體藏在桌面以下的黑暗裡）
+    const hs = spec.headScale || 1;
+    if (Array.isArray(hs)) D.head.scale.set(...hs); else D.head.scale.setScalar(hs);
+    D.head.position.y = 0.62 - HIP.y - (spec.headDrop || 0);
     // 錨點（嘴、耳朵、脖子）先用參數算的近似值，頭雕好後換成精確的
     D.anchors = WK.Head.anchors(charId, spec);
     // 雕過的頭馬上換（截圖、預覽同一格就看得到）；沒雕過的雕好再換
@@ -6739,11 +7225,12 @@ const World = (() => {
     D.torso.geometry.dispose();
     D.torso.geometry = new T.LatheGeometry(torsoProfile(b), 32);
     D.torso.scale.z = 0.6 * b.d;
+    D.torso.position.y = -HIP.y - D.bodyDrop;
+    D.collar.position.y = 0.5 - HIP.y - D.bodyDrop;
     if (WK.Body.cache[charId]) { if (D.bodyInst?.built !== WK.Body.cache[charId]) attachBody(WK.Body.cache[charId]); }
     else WK.Body.get(charId, spec).then(built => { if (my === headToken) attachBody(built); });
     D.shoulder[0].x = -0.24 * b.shoulder; D.shoulder[1].x = 0.24 * b.shoulder;
-    // 原版的莊家是一張很大的面具臉：頭（連眼睛、牙齒、錨點）整個放大，手和身體不變
-    D.head.scale.setScalar(spec.headScale || 1);
+    D.shoulder[0].y = D.shoulder[1].y = 0.4 - D.bodyDrop;
     // 個性：平常的表情、姿勢、休息時兩手的位置、待機小動作
     D.persona = spec.persona || {};
     const rp = D.persona.rest || [[-0.27, 0, 0.42], [0.27, 0, 0.42]];
@@ -6762,6 +7249,7 @@ const World = (() => {
   function attachBody(built) {
     if (D.bodyInst) D.bodyInst.remove();
     D.bodyInst = WK.Body.instance(built, D.group, D.upper, HIP);
+    D.bodyInst.torso.position.y -= D.bodyDrop || 0;
     D.torso.visible = false; D.collar.visible = false;
     for (const arm of D.arms) for (const k in arm) arm[k].visible = false;
   }
@@ -6902,12 +7390,14 @@ const World = (() => {
   // 兩節手臂的反向運動學：骨長固定，手肘朝 pole 的方向彎
   const ARM_UP = 0.35, ARM_FORE = 0.31;
   const HIP = V(0, -0.35, 0), X_AXIS = V(1, 0, 0), Z_AXIS = V(0, 0, 1);
+  // 手臂長度依角色放大 D.armK 倍（大頭的莊家手臂長，才搆得到桌子中間的槍；袖子跟著放大）
   function solveArm(S, W, pole) {
+    const k = D.armK || 1, AU = ARM_UP * k, AF = ARM_FORE * k;
     const d = W.clone().sub(S);
-    const len = Math.min(d.length(), ARM_UP + ARM_FORE - 0.002);
+    const len = Math.min(d.length(), AU + AF - 0.002);
     const dir = d.normalize();
-    const a = (ARM_UP * ARM_UP - ARM_FORE * ARM_FORE + len * len) / (2 * len);
-    const h = Math.sqrt(Math.max(0, ARM_UP * ARM_UP - a * a));
+    const a = (AU * AU - AF * AF + len * len) / (2 * len);
+    const h = Math.sqrt(Math.max(0, AU * AU - a * a));
     const pv = pole.clone().sub(S);
     pv.sub(dir.clone().multiplyScalar(pv.dot(dir))).normalize();
     const elbow = S.clone().add(dir.clone().multiplyScalar(a)).add(pv.multiplyScalar(h));
@@ -7206,7 +7696,8 @@ const World = (() => {
       let src = null, local = null, w = 0, curl = D.cuffed ? 1 : fidgetW * fidgetCurl;
       // 手肘壓在桌上（persona.elbows，目前沒有角色用）：手肘往外往下
       const ep = D.persona.elbows, elbowPole = ep && !D.cuffed ? V(side * ep[0], ep[1], ep[2]) : null;
-      const pole = V(side * 0.22, -0.28, -0.05);
+      // 身體往下放的角色（肩膀貼近桌面）手肘往兩旁抬，不往下垂（不然手肘穿進桌子）
+      const pole = D.bodyDrop > 0 ? V(side * 0.42, -0.04, -0.05) : V(side * 0.22, -0.28, -0.05);
       if (fidgetW > 0) pole.lerp(V(side * 0.45, -0.1, -0.1), fidgetW);
       if (D.revive) { src = paddles.userData.p[i]; local = HOLD.paddle; w = 1; curl = 0.8; }
       else if (D.itemHold[i] && D.itemGrip[i] > 0) {
@@ -7222,12 +7713,13 @@ const World = (() => {
         }
       }
       else if (D.grips[i] > 0) {
-        const self = gunPose === 'dealerAimSelf';
+        // 槍斜躺在桌上頂下巴時（臉往下放的角色）照一般的握法
+        const self = gunPose === 'dealerAimSelf' && faceDY() >= -0.2;
         src = gun;
         local = i === 0 ? (self ? HOLD.selfLow : HOLD.trigger) : (self ? HOLD.selfHigh : HOLD.pump);
         w = D.grips[i]; curl = 0.9 * w;
         // 槍托抵肩時握把離肩膀很近，手肘往外、往下放（大約跟肩膀一樣高；再高看起來像在聳肩）
-        if (local === HOLD.trigger) pole.lerp(V(side * 0.45, -0.3, 0), w);
+        if (local === HOLD.trigger) pole.lerp(V(side * 0.45, D.bodyDrop > 0 ? -0.04 : -0.3, 0), w);
       }
       const tp = rest, tq = restQ;
       if (src) {
@@ -7271,7 +7763,7 @@ const World = (() => {
     }
 
     // 第二步：手搆不到時，整個上半身往前趴過去（而不是把手臂拉長）
-    const L = (ARM_UP + ARM_FORE) * 0.93;
+    const L = (ARM_UP + ARM_FORE) * (D.armK || 1) * 0.93;
     const selfAim = gunPose === 'dealerAimSelf' && Math.max(D.grips[0], D.grips[1]) > 0.5;
     // 個性：瘋婆駝背、寡婦挺直（被銬住、拿槍、急救時姿勢照舊）
     // 拿東西、決定開槍（槍還沒拿起來）時姿勢馬上收掉（駝背、壓桌時舉槍，槍管會頂進下巴）；
@@ -7301,7 +7793,7 @@ const World = (() => {
       const hand = D.hands[i], arm = D.arms[i];
       const S = shoulderAt(i, D.upper.rotation.x);
       const target = wristT[i], zh = zhs[i];
-      const reach = target.distanceTo(S) - (ARM_UP + ARM_FORE) * 0.95;
+      const reach = target.distanceTo(S) - (ARM_UP + ARM_FORE) * (D.armK || 1) * 0.95;
       if (reach > 0) S.add(target.clone().sub(S).normalize().multiplyScalar(Math.min(0.05, reach)));
       const pole = target.clone().addScaledVector(zh, -0.35).add(poleOff[i]);
       const [elbow, wrist] = solveArm(S, target, pole);
@@ -7336,7 +7828,7 @@ const World = (() => {
       placeLimb(arm.up, S, elbow);
       placeLimb(arm.fore, elbow, wrist);
       placeLimb(arm.cuff, wrist.clone().addScaledVector(fore, -0.04), wrist.clone().addScaledVector(fore, -0.006));
-      if (D.bodyInst) D.bodyInst.arm(i, S, elbow, wrist);
+      if (D.bodyInst) D.bodyInst.arm(i, S, elbow, wrist, D.armK || 1);
       // 手銬的環套在手腕最細的地方，環的軸取手與前臂方向的中間
       wristsW.push(g.localToWorld(CUFF_AT.clone().applyQuaternion(q).add(hand.position)));
       D.ringAxis[i].copy(Z_AXIS).applyQuaternion(q).add(fore).transformDirection(g.matrixWorld);
@@ -7591,6 +8083,8 @@ const World = (() => {
     // 金屬部分（槍管、機匣、扳機護圈）用磨損的發藍黑鐵，木頭部分（槍托、護木）用有木紋的木頭
     metal.map = tex.gunMetal; metal.color.setHex(0xb8b8bc); metal.roughness = 0.45;
     dark.map = tex.gunMetal; dark.color.setHex(0x707074);
+    // 照原版錄影：槍的木頭是暗紅褐色、舊舊的（不是亮橘色）
+    wood.color.setHex(0x6a4a46); wood.roughness = 0.7; wood.envMapIntensity = 0.25;
 
     const s = new T.Shape();
     s.moveTo(-0.46, 0.035);
@@ -7661,16 +8155,21 @@ const World = (() => {
 
   const e2q = (roll, yaw, pitch) => new T.Quaternion().setFromEuler(new T.Euler(roll, yaw, pitch, 'YXZ'));
   const POSE = {
-    // 桌子中間偏莊家那邊（中線與子彈框留給玩家這邊）
-    rest: () => ({ pos: V(-0.06, 0.024, -0.12), quat: e2q(-PI / 2, 0.06, 0) }),
-    hover: () => ({ pos: V(-0.06, 0.06, -0.12), quat: e2q(-PI / 2 + 0.25, 0.06, 0) }),
+    // 照原版：槍躺在桌子正中間兩排道具格之間，槍托朝玩家、槍口朝莊家，往右斜一點（不是橫放）
+    rest: () => ({ pos: V(-0.02, 0.024, -0.08), quat: e2q(-PI / 2, PI / 2 - 0.32, 0) }),
+    hover: () => ({ pos: V(-0.02, 0.06, -0.08), quat: e2q(-PI / 2 + 0.25, PI / 2 - 0.32, 0) }),
     lifted: () => ({ pos: V(0.16, 0.4, 0.74), quat: e2q(0.15, PI / 2 + 0.55, 0.12) }),
     aimDealer: () => ({ pos: V(0.11, 0.43, 0.68), quat: e2q(0, PI / 2 + 0.02, 0.14) }),
     aimSelf: () => ({ pos: V(0.0, 0.49, 0.32), quat: e2q(0, -PI / 2, 0.16) }),
-    // 槍托抵在握握把那隻手的肩膀前，槍口對著你
-    dealerAimPlayer: () => ({ pos: V(-0.128, 0.42, -0.46), quat: e2q(0, -PI / 2 + 0.077, 0.145) }),
-    // 槍直立在腿上，槍口頂著下巴
-    dealerAimSelf: () => ({ pos: V(0, -0.04, -0.86), quat: e2q(0, PI / 2, 1.47) }),
+    // 槍托在握握把那隻手那一側、臉的旁邊，槍口對著你
+    // 臉往下放之後（faceDY），槍跟著降到下巴旁邊、下面（不穿過下顎），槍管還是在桌面上方
+    dealerAimPlayer: () => ({ pos: V(-0.128 + 0.37 * faceDY(), 0.42 + 0.8 * faceDY(), -0.46 - 0.1 * -faceDY()), quat: e2q(0, -PI / 2 + 0.077 - 0.28 * faceDY(), 0.145 + 0.12 * faceDY()) }),
+    // 莊家拿槍、放槍的中途：拖到自己面前橫放（槍口朝他的左手邊），兩手都搆得到
+    dealerPull: () => ({ pos: V(0.02, 0.03, -0.56), quat: e2q(-PI / 2, 0, 0) }),
+    // 槍口頂著下巴：臉沒往下放時槍直立在腿上；臉往下放（faceDY，下巴快貼到桌子）時槍斜躺在桌上，槍托在桌面、槍口往上頂住下巴
+    dealerAimSelf: () => faceDY() < -0.2
+      ? { pos: V(0, 0.27 + 0.4 * faceDY(), -0.61), quat: e2q(0, PI / 2, 0.27) }
+      : { pos: V(0, -0.01 + faceDY(), -0.86 + 0.3 * -faceDY()), quat: e2q(0, PI / 2, 1.47) },
   };
   let gunToken = 0, gunPose = 'rest';
   function gunTo(name, dur = 0.8, e = 'inOut') {
@@ -7760,7 +8259,8 @@ const World = (() => {
     s.position.copy(tmp2);
     scene.add(s);
     spent.push(s);
-    const from = tmp2.clone(), to = V(R(-0.14, 0.08), 0.016, R(-0.03, 0.07));
+    // 落在槍左邊、兩排道具格中間的空地（以前落在槍放回去的位置，彈殼會壓在槍底下）
+    const from = tmp2.clone(), to = V(R(-0.36, -0.2), 0.016, R(-0.12, 0.05));
     const ry = R(0, PI * 2), spin = PI / 2 + PI * 4;
     anim(0.7, t => {
       s.position.lerpVectors(from, to, t);
@@ -7817,6 +8317,18 @@ const World = (() => {
         }
         scene.add(m);
         slots[side][i] = m;
+        if (itemFrom && side === 'player') {
+          // 道具箱開著：從箱子裡拿出來、劃一道弧放進格子
+          const a = itemFrom.clone(), b = p.clone(), r0 = m.rotation.y;
+          m.position.copy(a);
+          anim(0.55, t => {
+            m.position.lerpVectors(a, b, t);
+            m.position.y = a.y + (b.y - a.y) * t + Math.sin(t * PI) * 0.16;
+            m.rotation.y = r0 + (1 - t) * 0.8;
+          }, 'inOut');
+          wait(0.5).then(() => SFX.play('place'));
+          return;
+        }
         anim(0.45, t => { m.position.y = (1 - t) * 0.35; }, 'back');
         wait(0.17).then(() => SFX.play('place'));
       });
@@ -7857,7 +8369,8 @@ const World = (() => {
   const P = { mouth: camPt(0, -0.085, -0.15), hand: camPt(0.1, -0.15, -0.46), ear: camPt(0.13, -0.03, -0.2), low: camPt(-0.02, -0.28, -0.34) };
   // 頭上的錨點從雕好的頭算（head.js 的 anchorsOf）：lips 嘴唇正前方、drink 喝東西時罐口的位置、ear 手機貼耳、neck 扎針
   const headAt = (key, i) => () => { const a = D.anchors[key]; return headPt(...(i === undefined ? a : a[i]).toArray())(); };
-  const DL = { mouth: headAt('lips'), drink: headAt('drink'), front: () => D.group.localToWorld(V(0.05, 0.3, 0.42)) };
+  // front：莊家把道具拿在面前的位置；臉往下放之後（faceDY）跟著往下、往前移，才不會拿在臉裡面
+  const DL = { mouth: headAt('lips'), drink: headAt('drink'), front: () => D.group.localToWorld(V(0.05, 0.3 + 0.5 * faceDY(), 0.42 - 0.35 * faceDY())) };
   const qCam = (rx = 0, ry = 0, rz = 0) => camera.quaternion.clone().multiply(eq(rx, ry, rz));
   const qDealer = (rx = 0, ry = 0, rz = 0) => { const q = new T.Quaternion(); D.group.getWorldQuaternion(q); return q.multiply(eq(0, PI, 0)).multiply(eq(rx, ry, rz)); };
   const qFor = (who, rx = 0, ry = 0, rz = 0) => (who === 'player' ? qCam(rx, ry, rz) : qDealer(rx, ry, rz));
@@ -8140,12 +8653,15 @@ const World = (() => {
         // 針頭從側面斜斜地朝脖子扎進去
         const sx = c.hand === 1 ? 1 : -1;
         const neck = headAt('neck', sx > 0 ? 0 : 1);
-        const start = () => neck().add(V(0.13 * sx, 0.04, 0.05));
+        // 頭橫向放得比 1.5 倍大時（莊家的臉放圓），起點跟著往外推，手才不會在臉頰裡
+        const kx = Math.max(1, D.head.scale.x / 1.5);
+        const start = () => neck().add(V((0.13 * kx + 0.2 * (kx - 1)) * sx, 0.04, 0.05 + 0.06 * (kx - 1)));
         const q = () => new T.Quaternion().setFromUnitVectors(V(-1, 0, 0), neck().sub(start()).normalize());
         await fly(m, start, 0.55, { q });
         await wait(0.2);
-        await fly(m, () => neck().add(V(0.075 * sx, 0.02, 0.03)), 0.1, { arc: 0, q, e: 'in' });
-        anim(0.4, t => { D.look = Math.sin(t * PI) * -0.25; });
+        await fly(m, () => neck().add(V((0.075 * kx + 0.1 * (kx - 1)) * sx, 0.02, 0.03 + 0.06 * (kx - 1))), 0.1, { arc: 0, q, e: 'in' });
+        // 被扎一下頭往旁邊縮；頭很寬時縮小一點，臉頰才不會撞進手裡
+        anim(0.4, t => { D.look = Math.sin(t * PI) * -0.25 / (kx * kx); });
       }
       SFX.play('adrenaline');
       shake = Math.max(shake, 0.05);
@@ -8245,112 +8761,106 @@ const World = (() => {
     });
   }
 
-  // ---------- 除顫器電擊板（貼在鏡頭前） ----------
-  // ---------- 死神：雙人時對手倒下，由它拿除顫器把對手電回來（活著的人不用乾等） ----------
-  let reaper;
-  function buildReaper() {
-    const g = new T.Group();
-    const mats = [];
-    const m = (color, o = {}) => { const x = std(color, Object.assign({ transparent: true, opacity: 0 }, o)); mats.push(x); return x; };
-    const cloth = m(0x060606, { roughness: 0.95 }), bone = m(0xc9bf9f, { roughness: 0.6 }), hole = m(0x000000, { roughness: 1 });
-    // 從膝蓋附近彎腰
-    const body = new T.Group(); body.position.y = 0.55; g.add(body);
-    const prof = [[0.0, -0.55], [0.44, -0.55], [0.4, -0.25], [0.31, 0.35], [0.27, 0.8], [0.22, 0.95], [0.12, 1.04], [0.0, 1.06]]
-      .map(([x, y]) => new T.Vector2(x, y));
-    const robe = mesh(new T.LatheGeometry(prof, 28), cloth); robe.scale.z = 0.72; body.add(robe);
-    // 兜帽前面開口，裡面是骷髏
-    const hood = mesh(new T.SphereGeometry(0.17, 24, 16, PI / 2 + 0.75, PI * 2 - 1.5), m(0x050505, { roughness: 0.95, side: T.DoubleSide }));
-    hood.scale.set(1, 1.28, 1.12); hood.position.y = 1.16; body.add(hood);
-    const head = new T.Group(); head.position.set(0, 1.12, 0.02); body.add(head);
-    const skull = mesh(new T.SphereGeometry(0.1, 20, 16), bone); skull.scale.set(0.88, 1.08, 0.95); head.add(skull);
-    const jaw = mesh(new T.BoxGeometry(0.11, 0.035, 0.07), bone); jaw.position.set(0, -0.085, 0.04); head.add(jaw);
-    const eyes = [];
-    for (const x of [-0.037, 0.037]) {
-      const sock = mesh(new T.SphereGeometry(0.027, 12, 10), hole, false); sock.position.set(x, 0.012, 0.075); head.add(sock);
-      const e = new T.Sprite(new T.SpriteMaterial({ map: tex.glow, color: 0xff3018, blending: T.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 }));
-      e.scale.setScalar(0.09); e.position.set(x, 0.012, 0.1); head.add(e); eyes.push(e);
-    }
-    // 兩隻手臂（袖子）＋骨頭手，各拿一塊電擊板
-    const arms = [];
+  // ---------- 雙人：對手那一側的電擊（取代以前的死神） ----------
+  // 對手中彈沒死、或第一二局倒下：一對電擊板從上方（螺旋電線垂下來）降到他胸前電一下，他抽動、坐回來。
+  // 電擊板掛在莊家（對手）身上，連人帶椅往後倒時跟著走
+  let oppPads = null;
+  function buildOppPads() {
+    oppPads = new T.Group();
+    const body = std(0x0c0909, { roughness: 0.6, metalness: 0.1 });
+    const rim = std(0x2a2220, { roughness: 0.5, metalness: 0.2 });
+    const cord = std(0x070505, { roughness: 0.35 });
+    const pads = [];
     for (const sx of [-1, 1]) {
-      const sh = new T.Group(); sh.position.set(0.21 * sx, 0.86, 0.02); body.add(sh);
-      const sleeve = mesh(new T.CylinderGeometry(0.055, 0.1, 0.5, 14, 1, true), m(0x070707, { roughness: 0.95, side: T.DoubleSide }));
-      sleeve.position.y = -0.25; sh.add(sleeve);
-      const hand = new T.Group(); hand.position.y = -0.52; sh.add(hand);
-      const palm = mesh(new T.BoxGeometry(0.06, 0.07, 0.025), bone); hand.add(palm);
-      for (let k = 0; k < 4; k++) {
-        const f = mesh(new T.CylinderGeometry(0.006, 0.005, 0.06, 6), bone, false);
-        f.position.set(-0.022 + k * 0.015, -0.06, 0.012); f.rotation.x = 0.5; hand.add(f);
+      // 板面朝向對手的胸口（-z），從兩側往中間斜
+      const p = new T.Group();
+      p.rotation.set(0, sx * 0.35, 0);
+      p.add(mesh(new T.BoxGeometry(0.14, 0.11, 0.08), body, false));
+      for (const [w, h, x, y] of [[0.14, 0.01, 0, 0.051], [0.14, 0.01, 0, -0.051], [0.01, 0.11, 0.066, 0], [0.01, 0.11, -0.066, 0]]) {
+        const f = mesh(new T.BoxGeometry(w, h, 0.006), rim, false); f.position.set(x, y, -0.042); p.add(f);
       }
-      const pad = new T.Group(); pad.position.set(0, -0.08, 0.04); hand.add(pad);
-      const plate = mesh(new T.BoxGeometry(0.1, 0.012, 0.075), m(0x3a3e42, { metalness: 0.85, roughness: 0.32, envMap: envTex }), false);
-      const back = mesh(new T.BoxGeometry(0.11, 0.03, 0.085), m(0x59605a, { roughness: 0.5 }), false); back.position.y = 0.02;
-      pad.add(plate, back);
-      arms.push(sh);
+      const grip = mesh(new T.BoxGeometry(0.08, 0.035, 0.05), body, false); grip.position.set(0, 0.07, 0.01);
+      p.add(grip);
+      // 螺旋電線：從握把先往外、再往上彎出畫面（繞過臉的兩旁）
+      p.add(mesh(coilGeometry(V(0, 0.09, 0.01), V(sx * 0.42, 0.12, 0.12), V(sx * 0.62, 1.3, 0.05), 12, 0.014, 0.005), cord, false));
+      oppPads.add(p);
+      pads.push(p);
     }
-    // 鐮刀立在旁邊
-    const scythe = new T.Group(); scythe.position.set(-0.5, 0, 0.05); scythe.rotation.z = -0.08; g.add(scythe);
-    const pole = mesh(new T.CylinderGeometry(0.016, 0.02, 2.0, 8), m(0x1e140c, { roughness: 0.8 })); pole.position.y = 1.0; scythe.add(pole);
-    const blade = mesh(new T.TorusGeometry(0.42, 0.014, 4, 32, 1.7), m(0x8a9096, { metalness: 0.9, roughness: 0.25, envMap: envTex }));
-    blade.scale.set(1, 1, 3); blade.rotation.set(0, 0, 0.15); blade.position.set(0.38, 1.62, 0); scythe.add(blade);
-    // 它自己帶一點冷光，站在暗處也看得到輪廓
-    const light = new T.PointLight(0x8fa4ff, 0, 2.6, 2); light.position.set(-0.3, 1.5, 1.0); g.add(light);
-    const zap = new T.PointLight(0xcfe8ff, 0, 2.5, 2); zap.position.set(0, 0.2, 0.7); g.add(zap);
-    g.visible = false;
-    scene.add(g);
-    reaper = { g, body, head, arms, eyes, mats, light, zap };
+    const l = new T.PointLight(0xcfe8ff, 0, 1.6, 2);
+    oppPads.add(l);
+    oppPads.userData = { pads, light: l };
+    oppPads.visible = false;
+    D.group.add(oppPads);
   }
-  function reaperFade(k) {
-    reaper.mats.forEach(x => { x.opacity = k; x.transparent = k < 0.999; x.depthWrite = k > 0.5; });
-    reaper.eyes.forEach(e => { e.material.opacity = 0.95 * k; });
-    reaper.light.intensity = 2.2 * k;
+  // 電擊板貼在胸口的位置（莊家的座標）：身體往下放的角色胸口也比較低
+  function oppPadsAt(k) {
+    const y = 0.28 - (D.bodyDrop || 0) * 0.7, z = 0.24;
+    oppPads.userData.pads.forEach((p, i) => p.position.set((i ? 1 : -1) * 0.14, y, z));
+    oppPads.userData.light.position.set(0, y, z + 0.1);
+    oppPads.position.y = 0.75 * (1 - k);
   }
-  // 對手倒在椅子後面的地上：死神從黑暗裡浮出來，彎腰電兩下，對手爬回椅子上，死神退回黑暗（約 9 秒）
-  async function reaperRevive() {
-    const R0 = reaper, g = R0.g;
-    g.visible = true;
-    g.position.set(0.8, -0.85, -2.85);   // 站在椅子右後方（椅背會擋住正後方），朝倒在椅子旁地上的對手彎腰
-    g.rotation.y = -0.2;
-    R0.body.rotation.x = 0; R0.head.rotation.set(0, 0, 0);
-    R0.arms.forEach(a => a.rotation.set(-0.25, 0, 0));
-    reaperFade(0);
-    D.group.visible = false;
-    cam({ pos: [-0.15, 0.62, 0.55], look: [0.45, 0.25, -2.0], fov: 50 }, 0.9);
-    SFX.play('reaper');
-    await anim(1.6, t => { reaperFade(t); g.position.z = -2.85 + 0.55 * t; g.position.y = -0.85 - 0.25 * (1 - t); });
-    // 抬頭看一眼，然後彎腰伸手
-    await anim(0.6, t => { R0.head.rotation.x = -0.25 * Math.sin(t * PI); });
-    await anim(1.0, t => {
-      R0.body.rotation.x = 0.75 * t;
-      R0.arms.forEach(a => { a.rotation.x = -0.25 - 0.9 * t; });
-      R0.head.rotation.x = 0.35 * t;
-    });
-    SFX.play('whine', 1.1 / speed);
-    await wait(1.1);
-    for (let k = 0; k < 2; k++) {
-      SFX.play('defib');
-      shake = Math.max(shake, 0.025);
-      emit(g.localToWorld(V(0, 0.1, 0.75)), { count: 26, color: 0xcfe8ff, size: 0.016, life: 0.45, vel: V(0, 0.8, 0.3), vspread: 0.8, gravity: 3, grow: 0, opacity: 1 });
-      await anim(0.35, t => { R0.zap.intensity = 9 * (1 - t); R0.body.rotation.x = 0.75 - 0.08 * Math.sin(t * PI); });
-      await wait(k ? 0.4 : 0.75);
-    }
+  async function oppShock() {
+    oppPads.visible = true;
+    await anim(0.55, t => oppPadsAt(t), 'out');
+    SFX.play('whine', 0.7 / speed);
+    await wait(0.7);
+    SFX.play('defib');
+    const chest = oppPads.userData.light.getWorldPosition(V());
+    for (const p of oppPads.userData.pads) emit(p.getWorldPosition(V()), { count: 18, color: 0xcfe8ff, size: 0.014, life: 0.45, vel: V(0, 0.6, 0.4), vspread: 0.8, gravity: 3, grow: 0, opacity: 1 });
+    tempLight(0xcfe8ff, chest, 6, 0.3);
+    shake = Math.max(shake, 0.03);
+    // 房間短暫過曝（比你自己被電時弱），對手整個人抽一下
+    exposureTo(1.7, 0.5, 0.06).then(() => exposureTo(1, 0, 0.9, 'out'));
+    face({ jaw: 0.3, wide: 1, brow: -0.6 });
+    const y0 = D.group.position.y;
+    await anim(0.35, t => { D.group.position.y = y0 + Math.sin(t * PI) * 0.03; oppPads.userData.light.intensity = 10 * (1 - t); });
+    D.group.position.y = y0;
+    face({});
     SFX.play('ecg');
-    // 對手從地上爬回椅子；死神直起身，看向你
-    resetDealer();
-    D.group.position.y = -0.95;
-    D.lean = 0.5;
-    const rise = anim(1.5, t => { D.group.position.y = -0.95 * (1 - t); D.lean = 0.5 * (1 - t); }, 'out');
-    await anim(0.9, t => {
-      R0.body.rotation.x = 0.75 * (1 - t);
-      R0.arms.forEach(a => { a.rotation.x = -1.15 + 0.9 * t; });
-      R0.head.rotation.x = 0.35 * (1 - t) - 0.1 * t;
-    });
-    SFX.play('ecg');
-    await rise;
+    await wait(0.35);
+    await anim(0.45, t => oppPadsAt(1 - t), 'in');
+    oppPads.visible = false;
+  }
+  // 中彈沒死：往後撞上椅背、頭垂下，電擊板電醒，再坐直
+  async function oppHit() {
+    D.head.updateMatrixWorld();
+    bloodBurst(D.head.localToWorld(V(0, 0.17, 0.05)));
+    await anim(0.3, t => {
+      seatBack(t, 0.03, 0.16, 0.22);
+      D.nod = -0.6 * t;
+      face({ jaw: 0.32 * Math.min(1, t * 3), wide: Math.min(1, t * 3), brow: -0.8 });
+    }, 'out');
+    SFX.play('chair');
+    face({});
+    await wait(0.4);
+    await oppShock();
+    await anim(0.5, t => { seatBack(1 - t, 0.03, 0.16, 0.22); D.nod = -0.6 * (1 - t); });
+    D.nod = 0;
+  }
+  // 倒下：靠在椅背上癱著（不像單人的莊家整個飛出去），之後 oppRevive 電兩下坐回來
+  async function oppDown() {
+    D.head.updateMatrixWorld();
+    bloodBurst(D.head.localToWorld(V(0, 0.17, 0.05)));
+    await anim(0.45, t => {
+      seatBack(t, 0.03, 0.22, 0.35);
+      D.nod = -0.9 * t;
+      face({ jaw: 0.35 * t, wide: 1 - t, brow: -0.8 });
+    }, 'out');
+    SFX.play('chair');
+  }
+  async function oppRevive() {
+    cam('dealer', 0.8);
     await wait(0.6);
-    await anim(1.3, t => { reaperFade(1 - t); g.position.z = -2.3 - 0.5 * t; });
-    g.visible = false;
-    D.group.position.y = 0; D.lean = 0;
+    await oppShock();
+    await wait(0.3);
+    await oppShock();
+    await anim(0.9, t => { seatBack(1 - t, 0.03, 0.22, 0.35); D.nod = -0.9 * (1 - t); });
+    D.nod = 0;
+    face({});
+  }
+  // 雙人：對手那邊也放一台除顫器
+  function setMpLayout(on) {
+    defibs[1].group.visible = on;
   }
 
   // ---------- 膚色：每個角色自己的色調與粗糙度（頭、耳朵脖子、手） ----------
@@ -8424,7 +8934,7 @@ const World = (() => {
 
   // ---------- 畫質 ----------
   const QUALITY = {
-    // pr：畫布用裝置像素（後製是整數倍放大，畫布不能再被瀏覽器縮放，不然像素邊緣會糊）；真正的算圖解析度看 RETRO_H
+    // pr：畫布用裝置像素（後製是整數倍放大，畫布不能再被瀏覽器縮放，不然會糊）；真正的算圖解析度看 RETRO_H
     low: { pr: 2, shadow: false, map: 512 },
     mid: { pr: 2, shadow: true, map: 1024 },
     high: { pr: 2, shadow: true, map: 2048 },
@@ -8501,6 +9011,107 @@ const World = (() => {
     paddles.visible = false;
   }
 
+  // ---------- 電擊（你中彈但還活著）：照原版錄影——黑畫面之後，眼前左下、右下一對很大的電擊板（螺旋電線往上彎出畫面），
+  // 整個畫面過曝成暖褐色；看完除顫器扣電量，回到座位時過曝在幾秒內慢慢退掉 ----------
+  let shockPads = null, shockWarm = 0, shocking = false;
+  // 螺旋電線：沿著 a→c→b 的二次曲線繞圈
+  function coilGeometry(a, c, b, turns, r, tube) {
+    const N = turns * 16, pts = [], base = new T.QuadraticBezierCurve3(a, c, b), up = V(0, 1, 0);
+    for (let i = 0; i <= N; i++) {
+      const t = i / N, p = base.getPoint(t), tg = base.getTangent(t);
+      const n = V().crossVectors(tg, Math.abs(tg.y) > 0.9 ? V(1, 0, 0) : up).normalize(), bn = V().crossVectors(tg, n);
+      const ang = t * turns * PI * 2;
+      pts.push(p.add(n.multiplyScalar(Math.cos(ang) * r)).add(bn.multiplyScalar(Math.sin(ang) * r)));
+    }
+    return new T.TubeGeometry(new T.CatmullRomCurve3(pts), N * 3, tube, 5, false);
+  }
+  function buildShockPads() {
+    shockPads = new T.Group();
+    const body = std(0x0c0909, { roughness: 0.6, metalness: 0.1 });
+    const rim = std(0x2a2220, { roughness: 0.5, metalness: 0.2 });
+    const cord = std(0x070505, { roughness: 0.35 });
+    for (const sx of [-1, 1]) {
+      // 鏡頭座標：z -0.34 往前、在畫面左下／右下，往中間斜，下半截超出畫面
+      const p = new T.Group();
+      p.position.set(sx * 0.33, -0.19, -0.34);
+      p.rotation.set(0.16, -sx * 0.45, sx * 0.04);
+      p.add(mesh(new T.BoxGeometry(0.2, 0.16, 0.12), body, false));
+      // 正面一圈凸起的框（原版的電擊板正面像一塊有邊框的面板）
+      const fz = 0.062;
+      for (const [w, h, x, y] of [[0.2, 0.012, 0, 0.074], [0.2, 0.012, 0, -0.074], [0.012, 0.16, 0.094, 0], [0.012, 0.16, -0.094, 0]]) {
+        const f = mesh(new T.BoxGeometry(w, h, 0.008), rim, false); f.position.set(x, y, fz); p.add(f);
+      }
+      // 握把：板子上面一塊比較小的方塊
+      const grip = mesh(new T.BoxGeometry(0.11, 0.045, 0.07), body, false); grip.position.set(sx * 0.03, 0.1, -0.01);
+      p.add(grip);
+      shockPads.add(p);
+      // 螺旋電線：從握把外側往上、往外彎出畫面（鏡頭座標）
+      p.updateMatrixWorld(true);
+      const g0 = p.localToWorld(V(sx * 0.07, 0.12, -0.02));
+      shockPads.add(mesh(coilGeometry(g0, V(sx * 0.24, 0.12, -0.42), V(sx * 0.62, 0.22, -0.4), 13, 0.016, 0.0056), cord, false));
+    }
+    const l = new T.PointLight(0xffd8b0, 0, 1.2, 2);
+    l.position.set(0, 0.1, -0.1);
+    shockPads.add(l);
+    shockPads.userData.light = l;
+    shockPads.visible = false;
+    camera.add(shockPads);
+  }
+  // 整體曝光（後製的 exposure 每格讀 renderer.toneMappingExposure）與暖褐色偏
+  function exposureTo(exp, warm, dur, e = 'inOut') {
+    const e0 = renderer.toneMappingExposure, w0 = shockWarm;
+    return anim(dur, t => { renderer.toneMappingExposure = e0 + (exp - e0) * t; shockWarm = w0 + (warm - w0) * t; }, e);
+  }
+  function shockIn() {
+    shocking = true;
+    shockPads.visible = true;
+    shockPads.userData.light.intensity = 0.6;
+    renderer.toneMappingExposure = 2.3; shockWarm = 1;
+    shake = Math.max(shake, 0.05);
+    // 舞台燈冒白煙
+    for (const s of WK.stageLights || []) emit(s.position.clone().add(V(0, 0.1, -0.05)), { count: 12, map: tex.smoke, additive: false, color: 0xd8d0c8, size: 0.06, life: 2.6, vel: V(0, 0.13, 0), vspread: 0.04, spread: 0.04, grow: 2.4, opacity: 0.55 });
+    const y0 = shockPads.position.y;
+    return anim(0.35, t => { shockPads.position.y = y0 - 0.025 * Math.sin(t * PI); }, 'out');
+  }
+  function shockPadsOff() { shockPads.visible = false; shockPads.userData.light.intensity = 0; }
+  async function shockOut(dur = 2.5) {
+    shockPadsOff();
+    if (dur <= 0) { renderer.toneMappingExposure = 1; shockWarm = 0; shocking = false; return; }
+    await exposureTo(1, 0, dur, 'out');
+    shocking = false;
+  }
+
+  // ---------- 選誰開槍：桌面上浮出半透明的大字「莊家」（遠半邊）與「你」（你這端），指著的那邊變亮 ----------
+  // 拿起槍時鏡頭在座位上：字放在兩排道具格中間的走道（x＝0），不壓到道具；「你」放在座位鏡頭看得到的最近處
+  let aimLabels = null;
+  function buildAimLabels() {
+    const make = (text, w, h, x, z) => {
+      const c = document.createElement('canvas'); c.width = 512; c.height = Math.round(512 * h / w);
+      const g = c.getContext('2d');
+      g.font = `${Math.round(c.height * 0.82)}px Cubic11, "Microsoft JhengHei", monospace`;
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.lineWidth = c.height * 0.06; g.strokeStyle = 'rgba(0,0,0,.6)'; g.strokeText(text, c.width / 2, c.height / 2);
+      g.fillStyle = '#fff'; g.fillText(text, c.width / 2, c.height / 2);
+      const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding;
+      const m = new T.Mesh(new T.PlaneGeometry(w, h), new T.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, opacity: 0 }));
+      m.rotation.x = -PI / 2; m.position.set(x, 0.006, z); m.renderOrder = 2; m.visible = false;
+      scene.add(m);
+      // 字型（Cubic 11）晚一點才載好：載好後重畫一次
+      if (document.fonts) document.fonts.load(g.font).then(() => { g.clearRect(0, 0, c.width, c.height); g.strokeText(text, c.width / 2, c.height / 2); g.fillText(text, c.width / 2, c.height / 2); t.needsUpdate = true; });
+      return m;
+    };
+    aimLabels = { dealer: make('莊家', 0.3, 0.15, 0, -0.42), player: make('你', 0.18, 0.18, 0, 0.27) };
+  }
+  // on：顯示／收起；target：指著誰（那邊亮、另一邊暗）
+  function setAimLabels(on, target = null) {
+    for (const k of ['dealer', 'player']) {
+      const m = aimLabels[k], to = !on ? 0 : !target ? 0.55 : target === k ? 0.95 : 0.28;
+      const from = m.material.opacity;
+      if (on) m.visible = true;
+      anim(0.25, t => { m.material.opacity = from + (to - from) * t; if (t === 1 && !on) m.visible = false; });
+    }
+  }
+
   // ---------- 莊家動作 ----------
   function dealerGripHand(i, on, dur = 0.6) {
     const from = D.grips[i], to = on ? 1 : 0;
@@ -8509,6 +9120,28 @@ const World = (() => {
   function dealerGrip(on, dur = 0.6) {
     return Promise.all([dealerGripHand(0, on, dur), dealerGripHand(1, on, dur)]);
   }
+  // 拿槍：左手先伸到桌子中間握住護木，把槍拖到自己面前（橫放），右手再握住握把（手搆不到桌子中間的握把，以前整個人會撲到桌上）
+  async function dealerTakeGun(dur = 1.6) {
+    const k = dur / 1.6;
+    D.itemHold[1] = { obj: gun, mat: HOLD.pump, curl: 0.85 };
+    await anim(0.55 * k, t => { D.itemGrip[1] = t; });
+    SFX.play('place', 0.8);
+    await gunTo('dealerPull', 0.6 * k);
+    await dealerGripHand(0, true, 0.45 * k);
+    // 左手換成拿槍的握法（同一個握點，不會跳）
+    D.grips[1] = 1; D.itemGrip[1] = 0; D.itemHold[1] = null;
+  }
+  // 放回槍：先放到面前，右手放開，左手握著護木把槍推回桌子中間再放開
+  async function dealerPutGun(dur = 1.6) {
+    const k = dur / 1.6;
+    await gunTo('dealerPull', 0.6 * k);
+    SFX.play('place', 1.6);
+    D.itemHold[1] = { obj: gun, mat: HOLD.pump, curl: 0.85 }; D.itemGrip[1] = 1; D.grips[1] = 0;
+    await dealerGripHand(0, false, 0.3 * k);
+    await gunTo('rest', 0.5 * k);
+    await anim(0.3 * k, t => { D.itemGrip[1] = 1 - t; });
+    D.itemHold[1] = null; D.itemGrip[1] = 0;
+  }
   function dealerLean(v, dur = 0.8) {
     const from = D.lean;
     return anim(dur, t => { D.lean = from + (v - from) * t; });
@@ -8516,16 +9149,25 @@ const World = (() => {
   // 血從頭部往後噴（子彈從你那邊來），加一團慢慢散開的血霧
   function bloodBurst(at) {
     SFX.play('splat');
-    emit(at, { count: 36, map: tex.smoke, additive: false, color: 0x8e0d0b, size: 0.018, life: 0.9, vel: V(0, 0.35, -1.3), vspread: 0.7, spread: 0.03, gravity: 3.2, grow: 0.6, opacity: 0.95 });
-    emit(at, { count: 14, map: tex.smoke, additive: false, color: 0x3a0404, size: 0.07, life: 1.4, vel: V(0, 0.08, -0.35), vspread: 0.15, spread: 0.04, grow: 2.2, opacity: 0.4 });
+    // 照原版錄影：暗背景前往鏡頭這邊、往兩旁飛出一團團圓圓的粉紅血滴，加上很多細碎的深色顆粒
+    emit(at, { count: 26, map: tex.drop, additive: false, color: 0x8a3448, size: 0.05, life: 1.3, vel: V(0, 0.25, 0.8), vspread: 0.75, spread: 0.06, gravity: 1.4, grow: 1.3, opacity: 0.95 });
+    emit(at, { count: 70, map: tex.drop, additive: false, color: 0x2a0c10, size: 0.012, life: 1.5, vel: V(0, 0.2, 0.5), vspread: 1.0, spread: 0.08, gravity: 1.0, grow: 1, opacity: 0.9 });
+    emit(at, { count: 10, map: tex.smoke, additive: false, color: 0x3a0404, size: 0.07, life: 1.4, vel: V(0, 0.08, -0.35), vspread: 0.15, spread: 0.04, grow: 2.2, opacity: 0.35 });
   }
+  // 莊家連人帶椅往後倒：椅子跟著人一起移動、一起藏起來（不然人會穿過椅背）
+  const CHAIR_AT = V(0, -0.85, -1.32);
+  function seatBack(t, dy, dz, rx) {
+    D.group.position.set(0, t * dy, -1.15 - t * dz);
+    D.group.rotation.x = -t * rx;
+    oppChair.position.set(CHAIR_AT.x, CHAIR_AT.y + t * dy, CHAIR_AT.z - t * dz);
+    oppChair.rotation.x = -t * rx;
+  }
+  function seatShow(on) { D.group.visible = on; oppChair.visible = on; }
   async function dealerHit() {
-    const g = D.group, z0 = -1.15;
     D.head.updateMatrixWorld();
     bloodBurst(D.head.localToWorld(V(0, 0.17, 0.05)));
     await anim(0.35, t => {
-      g.position.set(0, t * 0.25, z0 - t * 1.3);
-      g.rotation.x = -t * 0.9;
+      seatBack(t, 0.25, 1.3, 0.9);
       D.nod = -0.7 * Math.sin(Math.min(1, t * 2) * PI / 2);
       // 中彈：嘴張大、眼睛睜大
       face({ jaw: 0.32 * Math.min(1, t * 3), wide: Math.min(1, t * 3), brow: -0.8 });
@@ -8533,25 +9175,20 @@ const World = (() => {
     SFX.play('chair');
     D.nod = 0;
     face({});
-    g.visible = false;
+    seatShow(false);
     await wait(0.6);
     await lampOff(0.5);
-    g.position.set(0, 0, z0);
-    g.rotation.x = 0;
-    g.visible = true;
+    seatBack(0, 0, 0, 0);
+    seatShow(true);
   }
   async function dealerFall() {
-    const g = D.group, z0 = -1.15;
-    await anim(0.45, t => {
-      g.position.set(0, t * 0.3, z0 - t * 1.5);
-      g.rotation.x = -t * 1.1;
-    }, 'out');
-    g.visible = false;
+    await anim(0.45, t => seatBack(t, 0.3, 1.5, 1.1), 'out');
+    seatShow(false);
   }
   function resetDealer() {
-    D.group.position.set(0, 0, -1.15);
+    seatBack(0, 0, 0, 0);
     D.group.rotation.set(0, 0, 0);
-    D.group.visible = true;
+    seatShow(true);
     D.grips = [0, 0]; D.lean = 0; D.revive = false; D.bend = 0;
     D.itemHold = [null, null]; D.itemGrip = [0, 0];
     D.nod = 0; D.tilt = 0; D.turn = 0;
@@ -8609,7 +9246,8 @@ const World = (() => {
     setLamp(BRK.red, cut ? 1 : 0);
     BRK.light.intensity = cut ? 0 : 0.9;
     BRK.bulb.material.color.setHex(cut ? 0x1a1610 : 0xffe2b0);
-    defibScreen.material.map = cut ? WK.defibDeadTex() : WK.defibLiveTex();
+    // 斷電後螢幕照樣顯示電量（state.cut 時畫面上標 LINE CUT），不再換成固定的斷電圖
+    for (const d of defibs) d.screen.material.map = d.liveTex;
   }
 
   const BRK_CAM = { pos: [-1.08, 1.12, -2.28], look: [-1.42, 0.97, -3.45], fov: 40 };
@@ -8652,8 +9290,9 @@ const World = (() => {
     cam(defibCam(V(0, 0.24, 0.52), 38), 1.8, 'out');
     await wait(0.35);
     const scr = defibScreen.localToWorld(V(0, 0.03, 0.02));
+    const on = defibs.filter(d => d.group.visible);
     for (let i = 0; i < 6; i++) {
-      defibScreen.material.map = i % 2 ? WK.defibStaticTex() : WK.defibLiveTex();
+      for (const d of on) d.screen.material.map = i % 2 ? WK.defibStaticTex() : d.liveTex;
       if (i === 2) {
         SFX.play('spark');
         emit(scr, { count: 22, color: 0xffd090, size: 0.012, life: 0.5, vel: V(0, 0.5, 0.2), vspread: 0.5, gravity: 3, grow: 0, opacity: 1 });
@@ -8661,7 +9300,7 @@ const World = (() => {
       }
       await wait(0.07);
     }
-    defibScreen.material.map = WK.defibDeadTex();
+    for (const d of on) d.screen.material.map = WK.defibDeadTex();
     emit(defibBox.localToWorld(V(0, 0.12, -0.04)), { count: 8, map: tex.smoke, color: 0x666666, size: 0.04, life: 2.5, vel: V(0, 0.09, 0), vspread: 0.02, grow: 1.4, additive: false, opacity: 0.3 });
     await wait(0.5);
     // 緊急電源接上：燈帶著雜音亮回來，偏紅、比較暗
@@ -8672,20 +9311,140 @@ const World = (() => {
     await wait(0.7);
   }
 
+  // ---------- 道具箱（照原版：玩家這端一個黑色方盒，打開後道具一個個拿出來放進格子） ----------
+  let itemBoxG = null, boxLid = null, itemFrom = null;
+  const BOX_AT = V(0, 0, 0.8);
+  function buildItemBox() {
+    const at = (o, x, y, z) => { o.position.set(x, y, z); return o; };
+    const g = new T.Group();
+    const m = std(0x0e0c0b, { roughness: 0.55, metalness: 0.35 });
+    const inner = std(0x050404, { roughness: 0.9 });
+    const W = 0.3, H = 0.12, D = 0.22, t = 0.012;
+    g.add(at(mesh(new T.BoxGeometry(W, t, D), m), 0, t / 2, 0));
+    for (const sx of [-1, 1]) g.add(at(mesh(new T.BoxGeometry(t, H, D), m), sx * (W - t) / 2, H / 2, 0));
+    for (const sz of [-1, 1]) g.add(at(mesh(new T.BoxGeometry(W, H, t), m), 0, H / 2, sz * (D - t) / 2));
+    g.add(at(mesh(new T.BoxGeometry(W - 2 * t, 0.002, D - 2 * t), inner), 0, t + 0.002, 0));
+    // 蓋子：鉸鍊在遠端（莊家那一側）的上緣
+    boxLid = new T.Group();
+    boxLid.position.set(0, H, -D / 2);
+    const lid = mesh(new T.BoxGeometry(W + 0.006, 0.016, D + 0.006), m);
+    lid.position.set(0, 0.008, D / 2);
+    boxLid.add(lid);
+    // 蓋子前緣的鐵扣
+    const latch = mesh(new T.BoxGeometry(0.04, 0.03, 0.006), std(0x6a5a48, { metalness: 0.8, roughness: 0.4 }));
+    latch.position.set(0, -0.006, D + 0.004);
+    boxLid.add(latch);
+    g.add(boxLid);
+    g.position.copy(BOX_AT);
+    g.visible = false;
+    scene.add(g);
+    itemBoxG = g;
+  }
+  async function itemBox(open) {
+    if (open) {
+      itemBoxG.visible = true;
+      boxLid.rotation.x = 0;
+      await anim(0.35, t => { itemBoxG.position.y = BOX_AT.y + (1 - t) * 0.3; }, 'out');
+      SFX.play('place');
+      await wait(0.15);
+      await anim(0.5, t => { boxLid.rotation.x = -1.95 * t; }, 'out');
+      itemFrom = BOX_AT.clone().add(V(0, 0.07, 0));
+    } else {
+      itemFrom = null;
+      await anim(0.3, t => { boxLid.rotation.x = -1.95 * (1 - t); }, 'in');
+      SFX.play('place');
+      await anim(0.35, t => { itemBoxG.position.y = BOX_AT.y + t * 0.3; }, 'in');
+      itemBoxG.visible = false;
+    }
+  }
+
+  // ---------- 你倒下：燈全滅，黑暗裡只剩飛散的紅色粒子 ----------
+  let dark = false;
+  async function deathFx() {
+    dark = true;
+    if (WK.faceLight) WK.faceLight.intensity = 0;
+    if (WK.hemi) WK.hemi.intensity = 0;
+    redLight.intensity = 0;
+    camera.updateMatrixWorld(true);
+    const fwd = V(0, 0, -1).applyQuaternion(camera.quaternion), up = V(0, 1, 0).applyQuaternion(camera.quaternion);
+    const at = camera.position.clone().addScaledVector(fwd, 0.3).addScaledVector(up, -0.06);
+    emit(at, { count: 280, color: 0xc01810, size: 0.007, life: 1.8, vel: fwd.clone().multiplyScalar(1.4).addScaledVector(up, 0.5), spread: 0.05, vspread: 0.9, gravity: 2.2, grow: 0, opacity: 1 });
+    emit(at, { count: 90, color: 0x901008, size: 0.013, life: 2.6, vel: fwd.clone().multiplyScalar(0.5).addScaledVector(up, 0.3), spread: 0.08, vspread: 0.5, gravity: 1.2, grow: 0.4, opacity: 0.9 });
+    await wait(1.3);
+  }
+  function lightsOn() {
+    if (!dark) return;
+    dark = false;
+    if (WK.faceLight) WK.faceLight.intensity = WK.faceLight.userData.base;
+    if (WK.hemi) WK.hemi.intensity = WK.hemi.userData.base;
+    redLight.intensity = powerCut ? 1.7 : 0.9;
+  }
+
+  // ---------- 開場：走廊 → 黑一下 → 房間裡站著 → 坐下看桌上的生死狀 ----------
+  let INTRO = null, introSkip = null;
+  // 走一段走廊（點一下或按鍵就跳過）
+  async function introWalk(dur = 5.5) {
+    const C = INTRO.corridor;
+    orbit = false;
+    C.group.visible = true;
+    INTRO.waiver.group.visible = false;
+    rig.fov = 62; rig.roll = 0;
+    const my = ++camToken;
+    const dist = C.from.distanceTo(C.to);
+    const skipped = new Promise(res => { introSkip = res; });
+    await Promise.race([skipped, anim(dur, t => {
+      if (my !== camToken) return;
+      rig.pos.lerpVectors(C.from, C.to, t);
+      // 走路的上下晃動與左右擺
+      const ph = t * dist / 0.75 * PI;
+      rig.pos.y += Math.abs(Math.sin(ph)) * 0.03 - 0.015;
+      rig.pos.x += Math.sin(ph * 0.5) * 0.012;
+      rig.look.copy(C.look);
+      rig.look.x += Math.sin(ph * 0.5) * 0.04;
+    }, 'linear')]);
+    introSkip = null;
+    if (my === camToken) ++camToken;
+  }
+  function introRoom() {
+    INTRO.corridor.group.visible = false;
+    INTRO.waiver.group.visible = true;
+    INTRO.waiver.paper.position.set(-0.08, 0.003, 0.62);
+    INTRO.waiver.paper.material.opacity = 1;
+    // 站在椅子後面，往下看桌子
+    return cam({ pos: [0, 0.82, 1.7], look: [0, 0.1, 0.1], fov: 58 }, 0);
+  }
+
   // ---------- 運鏡 ----------
+  // 莊家的臉比原本設計（頭的樞紐 0.62、放大 1.5 倍）低多少公尺
+  const faceDY = () => D.head.position.y + HIP.y + 0.08 * D.head.scale.y - 0.74;
+  const lowered = (c, movePos = true) => {
+    const dy = faceDY();
+    return Object.assign({}, c, { pos: movePos ? [c.pos[0], c.pos[1] + dy, c.pos[2]] : c.pos, look: [c.look[0], c.look[1] + dy, c.look[2]] });
+  };
   const CAM = {
     // 預設視角（照原版開場）：從玩家這端的低處、很廣的視角往前看整張長桌，莊家在遠端中央，
     // 上面看得到兩盞舞台燈、燈架與垂掛的電線，左右看得到兩側的器材；每個鏡頭演完都回到這裡
-    seat: { pos: [0, 0.46, 0.66], look: [0, 0.06, -1.34], fov: 90 },
+    seat: { pos: [0, 0.56, 0.74], look: [0, 0.04, -1.0], fov: 84 },
     title: { pos: [0.95, 1.05, 1.5], look: [0, 0.45, -0.95], fov: 42 },
     high: { pos: [0, 2.05, 0.55], look: [0, 0, -0.3], fov: 62 },
-    shells: { pos: [0, 0.6, 0.72], look: [0, 0.02, 0.1], fov: 46 },
-    dealer: { pos: [0, 0.68, 0.95], look: [0, 0.68, -1.05], fov: 34 },
-    dealerItem: { pos: [0.32, 0.72, 0.5], look: [0, 0.42, -0.85], fov: 48 },
-    dealerAimMe: { pos: [0, 0.66, 1.18], look: [0, 0.48, -0.4], fov: 44 },
-    dealerSelf: { pos: [0.25, 0.62, 0.55], look: [0, 0.6, -1.0], fov: 40 },
+    // 照原版錄影：輪到你時從你這端的高處往下看整張桌子（選道具、拿槍、選誰開槍都在這個視角）
+    turn: { pos: [0, 1.0, 1.25], look: [0, 0, 0.36], fov: 55 },
+    // 照原版：拉近到右側那排 8 格的子彈框（TABLE.shellBox：x 0.12～0.48、z ±0.05）
+    // 照原版錄影：從框的左前方斜看，框斜斜地橫過畫面中間，右上角看得到除顫器的螢幕
+    // 鏡頭抬高一點：低了視線會擦過你道具格裡比較高的道具（啤酒、藥瓶）
+    shells: { pos: [0.06, 0.42, 0.42], look: [0.4, 0.02, -0.05], fov: 40 },
+    // 道具箱打開：從正上方往下看玩家這一半（道具箱、兩組 2×2 道具格）
+    box: { pos: [0, 1.0, 0.74], look: [0, 0, 0.46], fov: 58 },
+    // 開場坐下後看桌上的生死狀與按鍵台
+    waiver: { pos: [0.04, 0.55, 1.03], look: [0.05, 0, 0.6], fov: 44 },
+    // 對著莊家臉的鏡頭跟著臉的高度走（faceDY：頭往下放、放大之後臉比原本低）；從你座位看的只移視線
+    get dealer() { return lowered({ pos: [0, 0.68, 0.95], look: [0, 0.68, -1.05], fov: 34 }); },
+    // 拉遠一點：太近時手和袖子飄在畫面上、桌上的槍橫在鏡頭前
+    get dealerItem() { return lowered({ pos: [0.34, 0.8, 0.72], look: [0, 0.42, -0.85], fov: 50 }); },
+    get dealerAimMe() { return lowered({ pos: [0, 0.66, 1.18], look: [0, 0.48, -0.4], fov: 44 }, false); },
+    get dealerSelf() { return lowered({ pos: [0.25, 0.62, 0.55], look: [0, 0.6, -1.0], fov: 40 }); },
     lifted: { pos: [0, 0.78, 1.36], look: [0, 0.3, -0.6], fov: 56 },
-    aimDealer: { pos: [0.02, 0.62, 1.28], look: [0, 0.55, -1.0], fov: 46 },
+    get aimDealer() { return lowered({ pos: [0.02, 0.62, 1.28], look: [0, 0.55, -1.0], fov: 46 }, false); },
     aimSelf: { pos: [0, 0.66, 1.26], look: [0, 0.5, 0.3], fov: 50 },
     myItem: { pos: [0, 0.74, 1.28], look: [0, 0.45, 0.6], fov: 50 },
     floor: { pos: [0.35, -0.72, 1.85], look: [0.28, 0.45, 1.3], fov: 60, roll: 0.3 },
@@ -8793,8 +9552,9 @@ const World = (() => {
       if (p >= 1) { tasks.splice(i, 1); k.res(); }
     }
     // 燈光閃爍
-    const flick = Math.random() < (powerCut ? 0.012 : 0.004) ? 0.35 : 1;
-    if (flick < 1 && lampDim > 0.5 && time - lastBuzz > 1.5) { lastBuzz = time; SFX.play('flicker'); }
+    // dark：你倒下的那一刻燈全滅（deathFx），所有跟著吊燈的燈都乘 0
+    const flick = dark ? 0 : Math.random() < (powerCut ? 0.012 : 0.004) ? 0.35 : 1;
+    if (!dark && flick < 1 && lampDim > 0.5 && time - lastBuzz > 1.5) { lastBuzz = time; SFX.play('flicker'); }
     spot.intensity = lampBase * lampDim * flick;
     if (WK.propLights) for (const l of WK.propLights) l.intensity = l.userData.base * lampDim * flick;
     lampBulb.material.color.copy(lampTint).multiplyScalar(lampDim * flick);
@@ -8821,7 +9581,9 @@ const World = (() => {
       camera.rotateZ(R(-1, 1) * shake * 0.6);
       shake *= Math.exp(-real * 7);
     }
-    if (Math.abs(camera.fov - rig.fov) > 0.01) { camera.fov = rig.fov; camera.updateProjectionMatrix(); }
+    // 手機直放（畫面比寬還高）：垂直視角放大到左右至少跟上下一樣寬（最多 100°），桌子兩旁的道具才不會跑出畫面
+    const fov = camera.aspect >= 1 ? rig.fov : Math.min(100, Math.max(rig.fov, 2 * Math.atan(Math.tan(rig.fov * PI / 360) / camera.aspect) * 180 / PI));
+    if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
     // 莊家放在鏡頭（含震動）之後算：急救時電擊板掛在鏡頭上，手才會跟著這一格的電擊板，不會晚一格穿進去
     camera.updateMatrixWorld(true);
     updateDealer(dt);
@@ -8832,17 +9594,22 @@ const World = (() => {
 
   // ---------- 復古畫面：照原版用低解析度算圖，再用有序抖色壓成少少幾階顏色、整數倍放大成像素 ----------
   // 場景先畫進半精度的小畫布（線性、還沒色調映射），最後一張全螢幕方塊做色調映射、調色、
-  // 4×4 Bayer 抖色與每色 RETRO_LEVELS 階的量化。小畫布的一個像素在螢幕上剛好是 k×k 個裝置像素（k 是整數），
-  // 邊緣才銳利；k 由畫質的目標高度 RETRO_H 決定（至少 2）。抖色只用一半強度，而且在輪廓、白線這種明暗跳很大的地方關掉
-  const RETRO_H = { low: 420, mid: 480, high: 540 }, RETRO_LEVELS = 9;
+  // 4×4 Bayer 抖色與每色 RETRO_LEVELS 階的量化。小畫布的一個像素在螢幕上剛好是 k×k 個裝置像素（k 是整數）。
+  // 原版其實接近全解析度、邊緣平滑（放大錄影比對過）：只是顏色略少、有一層很細的抖色顆粒，不是粗像素風。
+  // 所以 k 由畫質的目標高度 RETRO_H 決定（中、高畫質在一般螢幕上 k = 1），高畫質的小畫布開 4× MSAA 反鋸齒。
+  // 低畫質要在一般筆電上保持 60fps：目標高度 420（800 高的畫面 k = 2，像素只有四分之一）；中畫質不開 MSAA
+  // （1280×800 量過：低 16.3、中 20.4、高 28.4 ms；低 540／中開 MSAA 時是 19.1／34.1 ms）。
+  // 每色 14 階＋全強度的 1 像素抖色＝原版那層很細的顆粒（9 階、2×2 像素會變成粗棋盤格與色帶）；輪廓、白線這種明暗跳很大的地方不抖
+  const RETRO_H = { low: 420, mid: 900, high: 1080 }, RETRO_LEVELS = 14, RETRO_MSAA = { low: 0, mid: 0, high: 4 };
   let rt = null, post = null;
   function buildPost() {
-    rt = new T.WebGLRenderTarget(4, 4, { type: T.HalfFloatType, minFilter: T.NearestFilter, magFilter: T.NearestFilter });
+    // stencilBuffer：不要模板，但要它才會拿到 24 位元的深度（沒有的話只有 16 位元，貼得近的面——標籤、面板、鏡片——會閃）
+    rt = new T.WebGLRenderTarget(4, 4, { type: T.HalfFloatType, minFilter: T.NearestFilter, magFilter: T.NearestFilter, samples: RETRO_MSAA[quality], stencilBuffer: true });
     const mat = new T.ShaderMaterial({
-      uniforms: { tex: { value: rt.texture }, size: { value: new T.Vector2(4, 4) }, k: { value: 2 }, exposure: { value: 1 }, levels: { value: RETRO_LEVELS } },
+      uniforms: { tex: { value: rt.texture }, size: { value: new T.Vector2(4, 4) }, k: { value: 2 }, exposure: { value: 1 }, levels: { value: RETRO_LEVELS }, warm: { value: 0 } },
       vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: `
-        uniform sampler2D tex; uniform vec2 size; uniform float k, exposure, levels;
+        uniform sampler2D tex; uniform vec2 size; uniform float k, exposure, levels, warm;
         // 跟 three.js 的 ACESFilmicToneMapping 一樣
         vec3 rrt(vec3 v) { vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
         vec3 aces(vec3 c) {
@@ -8854,15 +9621,21 @@ const World = (() => {
         vec3 toSRGB(vec3 c) { return mix(pow(c, vec3(1.0 / 2.4)) * 1.055 - 0.055, c * 12.92, step(c, vec3(0.0031308))); }
         float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
         float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
-        // 調色（原版：暗紅褐的磚與鏽、橄欖綠的桌布、米白的線）：
-        // 暗部壓成純黑、S 曲線拉對比、飽和度略降；暗部偏紅褐、亮部偏米白
+        // 調色（照原版錄影量過色票）：真正沒光的地方才是純黑，其餘暗部墊成深灰褐、不是一片黑；
+        // S 曲線拉一點對比、亮部壓下來不刺眼、飽和度降到 0.68；暗部偏灰紫紅、亮部偏米白
         vec3 grade(vec2 p) {
           vec3 c = toSRGB(aces(texture2D(tex, (p + 0.5) / size).rgb));
-          c = clamp((c - 0.045) / 0.94, 0.0, 1.0);
-          c = mix(c, c * c * (3.0 - 2.0 * c), 0.45);
+          c = clamp((c - 0.02) / 0.98, 0.0, 1.0);
           float l = dot(c, vec3(0.299, 0.587, 0.114));
-          c = mix(vec3(l), c, 0.62);
-          return c * mix(vec3(1.06, 0.93, 0.95), vec3(0.98, 0.97, 0.98), clamp(l * 1.6, 0.0, 1.0));
+          float lift = smoothstep(0.0, 0.05, l);
+          c = c * (1.0 - 0.3 * lift) + vec3(0.07, 0.062, 0.062) * lift;
+          c = mix(c, c * c * (3.0 - 2.0 * c), 0.3);
+          c = c * 0.9 / (1.0 - 0.1 * c);
+          l = dot(c, vec3(0.299, 0.587, 0.114));
+          c = mix(vec3(l), c, 0.68);
+          c *= mix(vec3(1.03, 0.92, 0.97), vec3(1.0, 0.97, 0.92), clamp(l * 1.6, 0.0, 1.0));
+          // 電擊後的過曝：往暖褐色（舊照片那樣）偏
+          return mix(c, vec3(dot(c, vec3(0.299, 0.587, 0.114))) * vec3(1.1, 0.93, 0.78), warm * 0.25);
         }
         // 鄰格的明暗只比線性亮度的對數（便宜；不用每格都跑一次完整調色）
         float ll(vec2 p) { return log2(dot(texture2D(tex, (p + 0.5) / size).rgb, vec3(0.299, 0.587, 0.114)) * exposure + 0.02); }
@@ -8873,7 +9646,7 @@ const World = (() => {
           float l = ll(p);
           float e = max(max(abs(ll(p + vec2(1.0, 0.0)) - l), abs(ll(p - vec2(1.0, 0.0)) - l)),
                         max(abs(ll(p + vec2(0.0, 1.0)) - l), abs(ll(p - vec2(0.0, 1.0)) - l)));
-          float amt = 0.5 * (1.0 - smoothstep(0.35, 0.8, e));
+          float amt = 1.0 - smoothstep(0.35, 0.8, e);
           c = floor(c * (levels - 1.0) + 0.5 + (bayer4(p) - 0.5) * amt) / (levels - 1.0);
           gl_FragColor = vec4(c, 1.0);
         }`,
@@ -8887,7 +9660,8 @@ const World = (() => {
   const retroSize = new T.Vector2();
   function draw() {
     renderer.getDrawingBufferSize(retroSize);
-    const k = Math.max(2, Math.round(retroSize.y / RETRO_H[quality]));
+    const k = Math.max(1, Math.round(retroSize.y / RETRO_H[quality]));
+    if (rt.samples !== RETRO_MSAA[quality]) { rt.samples = RETRO_MSAA[quality]; rt.dispose(); }
     const W = Math.max(1, Math.ceil(retroSize.x / k)), H = Math.max(1, Math.ceil(retroSize.y / k));
     post.mat.uniforms.k.value = k;
     if (rt.width !== W || rt.height !== H) { rt.setSize(W, H); post.mat.uniforms.size.value.set(W, H); }
@@ -8895,6 +9669,7 @@ const World = (() => {
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
     post.mat.uniforms.exposure.value = renderer.toneMappingExposure;
+    post.mat.uniforms.warm.value = shockWarm;
     renderer.render(post.scene, post.cam);
   }
 
@@ -8921,11 +9696,16 @@ const World = (() => {
     makeEnv();
     makeMaterials();
     ({ spot, lampBulb, lightCone, flashLight, redLight } = buildRoom());
-    ({ defibScreen, defibBox } = buildTable());
+    ({ defibs, chair: oppChair } = buildTable());
+    defibScreen = defibs[0].screen; defibBox = defibs[0].group;
+    buildItemBox();
+    INTRO = WK.buildIntro();
     buildDealer();
     buildGun();
     buildPaddles();
-    buildReaper();
+    buildShockPads();
+    buildAimLabels();
+    buildOppPads();
     buildPost();
     resize();
     window.addEventListener('resize', resize);
@@ -8951,7 +9731,7 @@ const World = (() => {
       scene: () => scene,
       dealer: () => D,
       // 自己用另一台相機畫多個視角截圖時用
-      gl: () => ({ renderer, camera, scene }),
+      gl: () => ({ renderer, camera, scene, post }),
       // 目前的鏡頭設定（可以直接丟回 cam() 還原）
       rig: () => ({ pos: rig.pos.toArray(), look: rig.look.toArray(), fov: rig.fov, roll: rig.roll }),
       advance(sec, fps = 60) { const n = Math.round(sec * fps); for (let i = 0; i < n; i++) tick(1 / fps); },
@@ -8972,13 +9752,42 @@ const World = (() => {
     showShells, loadShells, ejectShell, clearSpent, peek, unpeek,
     syncItems, clearItems, useItem, setDealerCuffed,
     onFx(fn) { handlers.fx = fn; },
-    dealerGrip, dealerGripHand, dealerLean, dealerHit, dealerFall, dealerFlinch, resetDealer, lampOff,
-    cutPower, setPower, reaperRevive, setQuality, setCharacter, coinFlip,
+    dealerGrip, dealerGripHand, dealerTakeGun, dealerPutGun, dealerHolding: () => D.grips[0] + D.grips[1] > 0.5, dealerLean, dealerHit, dealerFall, dealerFlinch, resetDealer, lampOff,
+    cutPower, setPower, oppHit, oppDown, oppRevive, setMpLayout, setQuality, setCharacter, coinFlip,
     // 舊名字：外觀現在是整個角色
     setDealerSkin: id => setCharacter(id),
     // 桌上除顫器的螢幕：{ dealerName, playerName, dealer, player, max, cuffed } 或 null（待機）
-    setDefib: st => WK.drawDefib(st),
-    camDefib: (dur = 0.7) => cam(defibCam(V(0, 0.17, 0.4), 36), dur),
+    // 桌上除顫器的螢幕：你的那台照 st 畫；雙人時對手那台左右對調（他的名字、電量在他自己那一欄）
+    setDefib: st => {
+      defibs[0].draw(st);
+      if (defibs[1].group.visible) {
+        const o = st && st.dealerName !== undefined ? Object.assign({}, st, { dealerName: st.playerName, playerName: st.dealerName, dealer: st.player, player: st.dealer, cuffed: st.cuffed && { dealer: st.cuffed.player, player: st.cuffed.dealer } }) : st;
+        defibs[1].draw(o);
+      }
+    },
+    itemBox, deathFx, lightsOn,
+    // 開場
+    introWalk, introRoom,
+    skipIntro() { if (introSkip) introSkip(); },
+    waiverName: n => INTRO.waiver.setName(n),
+    waiverKey: k => INTRO.waiver.flashKey(k),
+    waiverShow(on) { INTRO.waiver.group.visible = on; if (!on) INTRO.corridor.group.visible = false; },
+    // 簽好名：紙往莊家那邊滑走、淡掉，按鍵台收起來
+    async waiverOut() {
+      const W = INTRO.waiver, p0 = W.paper.position.clone();
+      W.paper.material.transparent = true;
+      await anim(0.7, t => {
+        W.paper.position.set(p0.x, p0.y, p0.z - t * 0.9);
+        W.paper.material.opacity = 1 - t;
+        for (const k of W.keypad) k.visible = t < 0.5;
+      }, 'in');
+      W.group.visible = false;
+      for (const k of W.keypad) k.visible = true;
+      W.paper.material.opacity = 1; W.paper.material.transparent = false;
+    },
+    // 照原版錄影：從玩家這一側斜看除顫器（螢幕往左後方退，看得到機身的側面與後面的器材）
+    // 鏡頭在機台斜上方（低了會壓在你第 5 格的道具上面）
+    camDefib: (dur = 0.7) => cam(defibCam(V(0.2, 0.32, 0.46), 40), dur),
     // 現在的鏡頭（丟回 cam() 就回到這裡）
     camNow: () => ({ pos: rig.pos.toArray(), look: rig.look.toArray(), fov: rig.fov, roll: rig.roll }),
     // 這個角色的頭和身體雕過了沒（沒雕過的換上去要等一兩秒）
@@ -8988,10 +9797,13 @@ const World = (() => {
     // 設定畫面的角色預覽：鏡頭拉近到莊家（對手）的臉，慢慢左右轉
     preview(on) {
       previewing = on;
-      if (on) { orbit = false; cam(PREVIEW_CAM, 0.9); }
+      if (on) { orbit = false; cam(lowered(PREVIEW_CAM), 0.9); }
       else { cam('title', 0.9); orbit = true; }
     },
     paddlesIn, paddlesZap, paddlesOut, reviveStage,
+    shockIn, shockOut, shockPadsOff, isShocking: () => shocking, setAimLabels,
+    // 桌面的道具格：開始發道具之後才畫出來
+    setGrid(on) { const m = on ? tex.table : tex.tableBare; if (M.table.map !== m) M.table.map = m; },
     setLook(v) { D.look = v; },
     dealerReact,
     // 表情：jaw 張嘴、smile 嘴角、brow 皺眉、wide 睜大、squint 瞇眼（反應動作那一層）
@@ -9039,7 +9851,7 @@ const UI = (() => {
       if (d.side === 'dealer') { if (stealResolve) resolveSteal(d.slot); return; }
       Game.playerUseItem(d.slot);
     });
-    World.onHover((item, x, y) => tip(item, x, y));
+    World.onHover(item => tip(item));
     World.onFx((name, who) => {
       if (name === 'adrenaline' && who === 'player') { flash('#fx-red'); SFX.play('heartbeat'); }
     });
@@ -9209,10 +10021,14 @@ const UI = (() => {
     }
   }
 
-  function renderItems(s) { World.syncItems(s.items); }
+  function renderItems(s) {
+    // 照原版：桌上有道具之後才出現道具格
+    if (s.items.player.some(Boolean) || s.items.dealer.some(Boolean)) World.setGrid(true);
+    World.syncItems(s.items);
+  }
 
   // 桌上除顫器螢幕要畫的東西
-  const defibState = (s, hp = s.hp) => ({ dealerName: Game.who('dealer'), playerName: s.name, round: s.round, dealer: hp.dealer, player: hp.player, max: s.max, cuffed: { dealer: !!s.cuffs.dealer, player: !!s.cuffs.player } });
+  const defibState = (s, hp = s.hp) => ({ dealerName: Game.who('dealer'), playerName: s.name, round: s.round, dealer: hp.dealer, player: hp.player, max: s.max, cut: !!s.wiresCut, cuffed: { dealer: !!s.cuffs.dealer, player: !!s.cuffs.player } });
 
   // 中彈後：鏡頭帶到除顫器，被扣掉的閃電閃三下熄掉，再回到原本的鏡頭（你可能還舉著槍）
   async function drain(who, from, to) {
@@ -9220,6 +10036,24 @@ const UI = (() => {
     if (!s || from <= to) return;
     const at = hp => World.setDefib(defibState(s, Object.assign({}, s.hp, { [who]: hp })));
     at(from);
+    if (who === 'player' && World.isShocking()) {
+      // 電擊中（bang 接過來）：硬切到除顫器特寫、畫面還過曝著，扣掉的閃電閃幾下熄掉，再硬切回座位、過曝慢慢退
+      World.shockPadsOff();
+      World.camDefib(0);
+      await World.wait(0.3);
+      for (let k = 0; k < 3; k++) {
+        at(to); SFX.play('beep');
+        await World.wait(0.14);
+        at(from);
+        await World.wait(0.14);
+      }
+      at(to); SFX.play('ecg');
+      await World.wait(0.45);
+      World.cam('seat', 0);
+      World.shockOut(2.5);
+      await World.wait(0.7);
+      return;
+    }
     const back = World.camNow();
     await World.camDefib(0.75);
     await World.wait(0.15);
@@ -9270,12 +10104,14 @@ const UI = (() => {
     $('#stage').classList.toggle('my-turn', on);
     World.setInteractive(on);
     if (on) {
-      World.cam('seat', 0.9);
+      // 照原版：輪到你時鏡頭從高處往下看整張桌子
+      World.cam('turn', 0.9);
       World.gunTo('rest', 0.5);
     } else hideAim();
   }
 
   function hideAim() {
+    if (aiming) World.setAimLabels(false);
     aiming = false;
     aimTarget = null;
     $('#stage').classList.remove('aiming');
@@ -9287,20 +10123,22 @@ const UI = (() => {
     $('#stage').classList.add('aiming');
     World.setInteractive(false);
     World.gunTo('lifted', 0.7);
-    World.cam('lifted', 0.8);
+    // 拿起槍：鏡頭從俯看回到座位，看著莊家（畫面上半）選要打誰；桌上浮出「莊家」「你」兩個大字
+    World.cam('seat', 0.6);
+    World.setAimLabels(true);
     SFX.play('pickup');
   }
   function closeAim() {
     hideAim();
     // 槍放回絨布桌上：比道具重的悶響，落桌那一刻才響
     World.gunTo('rest', 0.7).then(() => SFX.play('place', 1.6));
-    World.cam('seat', 0.8);
+    World.cam('turn', 0.8);
     if (Game.canAct()) World.setInteractive(true);
   }
   function previewAim(target) {
     if (!aiming) return;
     World.gunTo(target === 'dealer' ? 'aimDealer' : 'aimSelf', 0.6);
-    World.cam(target === 'dealer' ? 'aimDealer' : 'aimSelf', 0.7);
+    World.setAimLabels(true, target);
   }
   // 槍口轉向 target（已經指著就不動）
   function pointAt(target) {
@@ -9315,6 +10153,10 @@ const UI = (() => {
   }
 
   function resetTable() {
+    $('#stage').classList.remove('subs-up');
+    World.shockOut(0);
+    World.setGrid(false);
+    World.lightsOn();
     World.clearItems();
     World.clearSpent();
     World.resetDealer();
@@ -9334,15 +10176,14 @@ const UI = (() => {
   function resetGun() {
     World.dealerLean(0, 0.6);
     if (!down) World.cam('seat', 1);
-    // 先放開左手，右手把槍放回桌上後才鬆手
-    World.dealerGripHand(1, false, 0.6);
     const kind = react;
     react = null;
-    World.gunTo('rest', 1.2).then(() => {
-      SFX.play('place', 1.6);
-      World.dealerGripHand(0, false, 0.7);
-      if (kind) World.dealerReact(kind);
-    });
+    // 槍是莊家拿著的：放到面前、左手推回桌子中間再放開；你拿著的（或兩手都沒握）直接放回去
+    if (World.dealerHolding()) World.dealerPutGun().then(() => { if (kind) World.dealerReact(kind); });
+    else {
+      World.dealerGrip(false, 0.4);
+      World.gunTo('rest', 1.2).then(() => { SFX.play('place', 1.6); if (kind) World.dealerReact(kind); });
+    }
   }
 
   // 換局：畫面淡入黑色、再淡出，莊家講一句話（沒有大字橫幅）；雙人時用字幕說比分，第三局提醒線路會被切斷
@@ -9353,13 +10194,29 @@ const UI = (() => {
     // 每局開頭：小聲、悶（濾掉中高頻）、開頭淡入，提示換局但不要嚇人
     if (!SFX.sting('hit1', { gain: 0.3, lp: 500, attack: 0.06 })) SFX.play('sting');
     await World.wait(0.6);
-    World.cam('seat', 0);
+    const s = Game.s;
+    // 照原版：黑畫面淡出時鏡頭在除顫器上，螢幕先是空的（只有名字和格線），閃電再一格一格亮起來
+    // 先顯示第幾局（I・II・骷髏），再清空、閃電一格一格充電
+    if (s) { World.setDefib({ rounds: r }); World.camDefib(0); }
+    else World.cam('seat', 0);
     await World.wait(0.5);
     blk.style.transition = 'opacity .9s'; blk.style.opacity = '';
     await World.wait(0.9);
     blk.style.transition = '';
-    const s = Game.s;
-    if (s && s.mp) say(`第 ${r} 局 · 雙方各 ${hp} 點電量 · 比分 ${s.wins.player}：${s.wins.dealer}`);
+    if (s) {
+      await World.wait(1.0);
+      World.setDefib(defibState(s, { dealer: 0, player: 0 }));
+      await World.wait(0.3);
+      for (let i = 1; i <= hp; i++) {
+        World.setDefib(defibState(s, { dealer: i, player: i }));
+        SFX.play('beep');
+        await World.wait(0.22);
+      }
+      SFX.play('ecg');
+      await World.wait(0.5);
+      World.cam('seat', 0.9);
+    }
+    if (s && s.mp) say(`第 ${r} 局 · 雙方各 ${hp} 點電量 · 比分 ${s.wins.player}：${s.wins.dealer}${r === 3 ? ' · 有人剩 2 點時線路會被切斷' : ''}`);
     else if (r === 3) say('電量剩 2 點時，除顫器線路會被切斷。');
     speak(r === 1 ? 'intro' : Math.random() < 0.5 ? 'back' : 'round', { gap: 0 });
     await World.wait(0.6);
@@ -9368,13 +10225,16 @@ const UI = (() => {
   async function presentShells(live, blank) {
     const again = loads++ > 0;
     World.clearSpent();
+    // 子彈在畫面下半：報數的字幕移到上面，不蓋住子彈
+    $('#stage').classList.add('subs-up');
     World.cam('shells', again ? 0.6 : 0.9);
     await World.wait(again ? 0.15 : 0.4);
     await World.showShells([...Array(live).fill(true), ...Array(blank).fill(false)]);
-    const talk = say(`${live} 發實彈。${blank} 發空包彈。`);
-    if (again) await World.wait(0.9); else { await talk; await World.wait(0.6); }
+    // 照原版：子彈先躺在 8 格框裡，字幕報完數之後才裝進槍裡
+    await say(`${live} 發實彈。${blank} 發空包彈。`);
+    await World.wait(again ? 0.3 : 0.6);
     await World.loadShells();
-    await talk;
+    $('#stage').classList.remove('subs-up');
     SFX.play('rack');
     await World.rack();
     World.cam('seat', 0.9);
@@ -9392,11 +10252,9 @@ const UI = (() => {
       World.cam('dealer', 0.8);
       // 右手先伸過去握住桌上的槍，舉起來的途中左手再托住護木
       speak(target === 'player' ? 'aimYou' : 'aimSelf', { chance: 0.55 });
-      await World.dealerGripHand(0, true, 0.85);
-      const lift = World.gunTo(target === 'player' ? 'dealerAimPlayer' : 'dealerAimSelf', 1.4);
-      await World.wait(0.55);
-      World.dealerGripHand(1, true, 0.75);
-      await lift;
+      // 左手把槍從桌子中間拖過來，右手握住握把，再兩手舉起來
+      await World.dealerTakeGun();
+      await World.gunTo(target === 'player' ? 'dealerAimPlayer' : 'dealerAimSelf', 1.2);
       if (target === 'player') { World.dealerLean(0.35, 1.2); World.cam('dealerAimMe', 0.9); }
       else World.cam('dealerSelf', 0.9);
       await World.wait(0.3);
@@ -9431,27 +10289,36 @@ const UI = (() => {
     World.muzzleFlash();
     flash('#fx-flash');
     if (target === 'dealer') {
-      await World.dealerHit();
+      // 雙人：對手中彈沒死就在他那邊演電擊（倒下的交給 dealerDown）；單人的莊家照原版被打飛、在黑暗裡回到座位
+      if (Game.s.mp) { if (Game.s.hp.dealer > 0) await World.oppHit(); }
+      else await World.dealerHit();
       if (Game.s.hp.dealer > 0) { World.dealerFeel('pain'); speak(shooter === 'dealer' ? 'hurtSelf' : 'youHit', { gap: 0, delay: 0.3 }); }
       return;
     }
     // 你中彈：他笑（他自己開的槍更得意）
     World.dealerFeel(shooter === 'dealer' ? 'gloat' : 'amused');
-    flash('#fx-red');
-    bloodScreen();
-    World.shake(0.1);
-    if (Game.s.hp.player <= 0) { await fall(); return; }
-    speak(shooter === 'dealer' ? 'hitYou' : 'youHurt', { gap: 0, delay: 1.2 });
-    World.cam('jerk', 0.15, 'out');
-    await eyes(0, 4, 0.12);
-    await World.wait(0.9);
-    SFX.play('heartbeat');
+    if (Game.s.hp.player <= 0) {
+      flash('#fx-red');
+      bloodScreen();
+      World.shake(0.1);
+      await World.deathFx(); await fall(); return;
+    }
+    // 照原版錄影：中彈沒死——畫面立刻全黑（只剩耳鳴）約 2 秒，接著眼前一對電擊板、整個畫面過曝，
+    // 然後 drain() 帶到除顫器看電量被扣掉，回座位後過曝慢慢退掉
+    speak(shooter === 'dealer' ? 'hitYou' : 'youHurt', { gap: 0, delay: 3.6 });
+    const blk = $('#fx-black');
+    blk.style.transition = 'none'; blk.style.opacity = '1';
+    await World.wait(2.0);
     World.cam('seat', 0);
     World.gunTo('rest', 0);
     World.dealerGrip(false, 0.01);
-    await eyes(0.35, 6, 0.5);
-    await eyes(0.1, 6, 0.25);
-    await eyes(1, 0, 0.9);
+    World.shockIn();
+    SFX.play('defib');
+    blk.style.opacity = '';
+    await World.wait(0.05);
+    blk.style.transition = '';
+    SFX.play('heartbeat');
+    await World.wait(1.0);
   }
 
   // 空包彈：莊家有反應。你打他沒中，他當場冷笑；其他情況等槍放回桌上（頭才不會撞到槍）
@@ -9502,7 +10369,7 @@ const UI = (() => {
     await World.useItem(side, slot, viewer, id);
   }
   // 道具的結果說完了，鏡頭回到座位
-  function itemDone() { World.cam('seat', 0.9); }
+  function itemDone() { World.cam(Game.s && Game.s.turn === 'player' ? 'turn' : 'seat', 0.9); }
 
   function pickSteal(s) {
     return new Promise(res => {
@@ -9532,14 +10399,54 @@ const UI = (() => {
     await World.wait(0.6);
   }
 
+  // 道具箱：鏡頭轉到正上方，箱子落到桌上打開；關上後回到座位
+  async function itemBox(open) {
+    if (open) {
+      World.cam('box', 0.8);
+      await World.itemBox(true);
+    } else {
+      await World.wait(0.3);
+      await World.itemBox(false);
+      World.cam('seat', 0.8);
+    }
+  }
+
+  // 開場：黑畫面淡出 → 走過走廊 → 走到門口黑掉 → 切進房間、坐下看桌上的生死狀
+  async function intro() {
+    const blk = $('#fx-black');
+    blk.style.transition = 'opacity .5s'; blk.style.opacity = '1';
+    await World.wait(0.5);
+    const walk = World.introWalk(5.5);
+    await World.wait(0.1);
+    blk.style.transition = 'opacity 1.4s'; blk.style.opacity = '';
+    await walk;
+    SFX.play('creak');
+    blk.style.transition = 'opacity .35s'; blk.style.opacity = '1';
+    await World.wait(0.5);
+    World.introRoom();
+    await World.wait(0.3);
+    blk.style.transition = 'opacity .9s'; blk.style.opacity = '';
+    await World.cam('waiver', 1.6);
+    blk.style.transition = '';
+  }
+
   async function dealerDown() {
+    const s0 = Game.s;
     World.cam('dealer', 0.5);
     SFX.play('creak');
     SFX.sting('hit2', { gain: 0.8 });
     SFX.music(-1);
-    await World.dealerFall();
-    SFX.play('thud');
+    if (s0 && s0.mp) await World.oppDown();
+    else { await World.dealerFall(); SFX.play('thud'); }
     await World.wait(0.6);
+    // 照原版：除顫器整片只顯示「你的名字 獲勝！」
+    const s = Game.s;
+    if (s) {
+      World.setDefib({ win: s.name });
+      SFX.play('ecg');
+      await World.camDefib(0.8);
+      await World.wait(1.6);
+    }
   }
 
   // 倒地 → 心電圖拉平 → 睜眼看到電擊板 → 電擊 → 醒來
@@ -9550,17 +10457,19 @@ const UI = (() => {
     if (!revive) SFX.music(-1);
     await World.wait(2.6);
     if (!revive) { await World.wait(0.6); return; }
+    // 雙人：沒有莊家來救你（對手是另一個玩家），是你自己那台除顫器的電擊板（跟中彈沒死時同一對）；單人：莊家俯身拿著電擊板
+    const mp = Game.s && Game.s.mp;
     World.cam('floor', 0);
-    World.reviveStage(true);
+    if (!mp) World.reviveStage(true);
     await eyes(0.16, 10, 0.9);
     await eyes(0.04, 10, 0.35);
     await eyes(0.42, 6, 1.0);
-    World.paddlesIn();
+    if (!mp) World.paddlesIn();
     SFX.play('whine', 1.4 / pace);
     await World.wait(1.4);
     SFX.play('defib');
     flash('#fx-flash');
-    World.paddlesZap();
+    if (mp) World.shockIn(); else World.paddlesZap();
     await eyes(0, 4, 0.06);
     await World.wait(0.45);
     SFX.play('ecg');
@@ -9572,10 +10481,11 @@ const UI = (() => {
     SFX.play('ecg');
     await eyes(0, 0, 0.6);
     SFX.muffle(false);
-    await World.paddlesOut();
-    World.reviveStage(false);
+    if (mp) World.shockOut(0);
+    else { await World.paddlesOut(); World.reviveStage(false); }
     down = false;
     World.cam('seat', 0);
+    World.lightsOn();
     // 接著打同一局，不會再經過 resetTable()，要自己把眼睛睜開
     World.gunTo('rest', 0);
     await eyes(1, 0, 0.9);
@@ -9629,9 +10539,9 @@ const UI = (() => {
     World.cam('seat', 0.8);
   }
 
-  // 雙人：對手倒下，死神把他電回來
-  async function reaperRevive() {
-    await World.reaperRevive();
+  // 雙人：對手倒下（第一、二局），他那邊的電擊板把他電回來、坐回椅子上
+  async function oppRevive() {
+    await World.oppRevive();
     World.cam('seat', 1);
   }
 
@@ -9639,6 +10549,8 @@ const UI = (() => {
   async function cutWires() {
     hideAim();
     await World.cutPower();
+    // 螢幕接回緊急電源：電量照樣顯示，標上 LINE CUT
+    if (Game.s) renderHP(Game.s);
     SFX.music(4);
     await World.cam('seat', 1.2);
     World.dealerFeel('shock');
@@ -9660,22 +10572,24 @@ const UI = (() => {
     e.querySelector('button').focus();
   }
 
-  // 道具名稱：滑鼠移到道具上時，在旁邊顯示一行小字
-  function tip(item, x, y) {
+  // 道具說明：照原版錄影，滑鼠移到道具上時在畫面下方中間顯示名稱，下面一兩行小字說明
+  function tip(item) {
     const t = $('#tip');
     if (!item) { t.hidden = true; return; }
-    t.textContent = `${item.side === 'dealer' ? Game.who('dealer') + '的' : ''}${ITEMS[item.id].name}`;
+    const it = ITEMS[item.id];
+    t.innerHTML = '';
+    const n = document.createElement('div'); n.className = 'tip-name';
+    n.textContent = `${item.side === 'dealer' ? Game.who('dealer') + '的' : ''}${it.name}`;
+    const d = document.createElement('div'); d.className = 'tip-desc'; d.textContent = it.desc || '';
+    t.append(n, d);
     t.hidden = false;
-    const w = t.offsetWidth, h = t.offsetHeight;
-    t.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, x + 18))}px`;
-    t.style.top = `${Math.max(8, y - h - 10)}px`;
   }
 
   return {
     build, say, renderItems, renderHP, renderInfo, renderAll, setInteractive, drain,
     openAim, closeAim, previewAim, resetTable, setSawed, resetGun, roundBanner, presentShells,
     aim, bang, dryFire, eject, peek, itemFx, itemDone, pickSteal, resolveSteal, isStealing, hurt,
-    dealerDown, blackout, showEnd, showLeft, tip, cutWires, reaperRevive, coinFlip, skip, event, speak,
+    dealerDown, blackout, showEnd, itemBox, intro, showLeft, tip, cutWires, oppRevive, coinFlip, skip, event, speak,
     isAiming: () => aiming,
     // 鍵盤瞄準：方向鍵指向誰、Enter／空白鍵開槍
     pointAt, fireAim, aimTarget: () => aimTarget,
@@ -9708,15 +10622,35 @@ function boot() {
     SFX.play('rack');
     SFX.music(0);
     $('#title').hidden = true;
-    $('#waiver').hidden = false;
-    $('#name').focus();
+    // 照原版：先走過一條暗的走廊，進房間坐下，桌上放著生死狀與輸入名字的按鍵台
+    World.setOrbit(false);
+    introOn = true;
+    UI.intro().then(() => {
+      introOn = false;
+      World.waiverName(nameInput.value);
+      $('#waiver').hidden = false;
+      $('#name').focus();
+    });
   });
+  // 開場走廊：點一下或按任何鍵跳過
+  let introOn = false;
+  const skipIntro = () => { if (introOn) World.skipIntro(); };
+  window.addEventListener('keydown', skipIntro);
+  $('#gl').addEventListener('pointerdown', skipIntro);
 
   const nameInput = $('#name');
   nameInput.addEventListener('input', () => {
     nameInput.value = nameInput.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
     $('#waiver-error').textContent = '';
+    World.waiverName(nameInput.value);
   });
+  // 桌上按鍵台的鍵跟著按下去亮一下
+  nameInput.addEventListener('keydown', e => {
+    const k = e.key.length === 1 ? e.key.toUpperCase() : e.key === 'Backspace' ? 'DEL' : e.key === 'Enter' ? 'ENTER' : '';
+    if (/^[A-Z]$|^DEL$|^ENTER$/.test(k)) World.waiverKey(k);
+  });
+  // 手機：點畫面就叫出鍵盤
+  $('#waiver').addEventListener('pointerdown', e => { if (e.target === $('#waiver')) nameInput.focus(); });
 
   // 檢查簽名，合格就回傳名字
   function signedName() {
@@ -9735,9 +10669,12 @@ function boot() {
     SFX.play('sign');
     $('#waiver').hidden = true;
     $('#lobby').hidden = true;
+    World.waiverOut();
     // 轉場：彈巢轉一下再入座；對手的角色還沒雕過就等它雕好（雙人時對方的訊息會排隊等）
     Loader.cover(['玩家準備中……', '即將開始……'], () => {
       World.setDealerSkin(skin);
+      // 雙人：對手那邊也有一台除顫器
+      World.setMpLayout(!!opts.mp);
       return World.charReady();
     }, 1.1).then(() => {
       $('#stage').classList.remove('idle');
@@ -9957,6 +10894,8 @@ function backToTitle() {
   if (Game.s) { Game.s.over = true; Game.s.busy = true; }
   UI.setInteractive(false);
   UI.resetTable();
+  World.setMpLayout(false);
+  World.waiverShow(false);
   $('#stage').classList.add('idle');
   $('#title').hidden = false;
   World.cam('title', 0);
